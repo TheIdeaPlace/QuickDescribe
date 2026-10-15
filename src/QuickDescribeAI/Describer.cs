@@ -123,7 +123,9 @@ public sealed class Describer : IDisposable
         using var bitmap = await DecodeAsync(id, mime, image);
         using var buffer = ImageBuffer.CreateForSoftwareBitmap(bitmap);
         var result = await _recognizer.RecognizeTextFromImageAsync(buffer);
-        return result.Lines.Select(l => l.Text.Trim()).Where(t => t.Length > 0).ToList();
+        // A picture without text comes back with no lines at all, not an empty list (found warming up on a blank picture,
+        // 15 Oct 2026): it was answered as an internal error, and every photo without text went to the built-in OCR.
+        return (result.Lines ?? []).Select(l => (l.Text ?? "").Trim()).Where(t => t.Length > 0).ToList();
     }
 
     /// <summary>Drops the model after an unexpected failure, so the next request starts it

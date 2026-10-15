@@ -45,7 +45,8 @@ public class WarmUpTrialTests
         var cancel = TestContext.Current.CancellationToken;
         using var ai = new WindowsAI();
         var warm = await ai.WarmUpAsync(cancel);
-        var picture = Drawn.Text(700, 200, 28, "Warm and ready", "42 Harbor Road");
+        // A picture from a file: drawn text comes out blank when Windows' session has no display (a disconnected remote session).
+        var picture = Pictures.FromFile(Environment.GetEnvironmentVariable("QD_TRIAL_PICTURE") ?? throw new InvalidOperationException("Set QD_TRIAL_PICTURE.")).Image;
         var started = DateTime.UtcNow;
         var result = await Describing.RunAsync(picture, "accessible", ai, cancel);
         TestContext.Current.TestOutputHelper!.WriteLine(
