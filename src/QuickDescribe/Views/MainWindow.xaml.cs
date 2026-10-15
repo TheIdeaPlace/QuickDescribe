@@ -108,6 +108,7 @@ public partial class MainWindow : Window
         "F to describe the item with focus," + Environment.NewLine +
         "V to describe a picture on the clipboard." + Environment.NewLine + Environment.NewLine +
         "Quick Describe comes to the front with the result here. Escape goes back to where you were. " +
+        "Describe, Description Type chooses Accessible, Detailed, Brief or Diagram descriptions. " +
         "You can also open a picture file (Ctrl+O) or drop one on this window. " +
         "Pictures are described with Windows' on-device AI on Copilot+ PCs, and their text read with Windows' text recognition. " +
         "Nothing leaves this PC.";
@@ -405,6 +406,7 @@ public partial class MainWindow : Window
                 _settings.Kind = id;
                 _settings.Save();
                 foreach (var other in KindMenu.Items.OfType<MenuItem>()) other.IsChecked = (string)other.Tag == id;
+                Announcer.Announce($"{title} descriptions");
             };
             KindMenu.Items.Add(item);
         }
