@@ -1,4 +1,4 @@
-using System.Media;
+﻿using System.Media;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -116,7 +116,7 @@ public partial class MainWindow : Window
         "Describe, Description Type chooses Accessible, Detailed, Brief or Diagram descriptions. " +
         "You can also open a picture file (Ctrl+O) or drop one on this window. " +
         "Pictures are described with Windows' on-device AI on Copilot+ PCs, and their text read with Windows' text recognition. " +
-        "Nothing leaves this PC.";
+        "Pictures never leave this PC.";
 
     // ---- Describing ----
 
@@ -206,7 +206,7 @@ public partial class MainWindow : Window
         _describing = picture.Source;
         _unspoken = null;
         Title = $"Describing {picture.Source} - {AppInfo.Name}";
-        ResultBox.Text = $"Describing {picture.Source}…";
+        ResultBox.Text = $"Describing {picture.Source}â€¦";
         Announcer.Announce($"Describing {picture.Source}");
         Result result;
         try
@@ -353,7 +353,7 @@ public partial class MainWindow : Window
     {
         try
         {
-            ShowMessage("Checking Windows AI…", null);
+            ShowMessage("Checking Windows AIâ€¦", null);
             var details = await WindowsAI.DetailsAsync(_closing.Token);
             var lines = new List<string>();
             if (details.Usable)

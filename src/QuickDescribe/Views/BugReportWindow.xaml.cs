@@ -43,6 +43,9 @@ public partial class BugReportWindow : Window
             AttachmentsBox.Visibility = Visibility.Visible;
         }
         SystemCheckBox.IsChecked = report.IncludeSystemCheck;
+        // What the report came with (a crash report's title), so Read() below keeps it rather than emptying it.
+        TitleBox.Text = report.Title;
+        ContactBox.Text = report.Contact;
         if (string.IsNullOrEmpty(key))
         {
             // Said with Send too, where it matters, since the note itself isn't a Tab stop.
@@ -88,6 +91,12 @@ public partial class BugReportWindow : Window
     private void Field_Changed(object sender, RoutedEventArgs e) => Read();
 
     private void Kind_Checked(object sender, RoutedEventArgs e) => Read();
+
+    /// <summary>Arrowing to a kind chooses it, as radio buttons do everywhere else in Windows (WPF's only move focus).</summary>
+    private void Kind_Focused(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        if (sender is RadioButton { IsChecked: not true } radio) radio.IsChecked = true;
+    }
 
     private async void Send_Click(object sender, RoutedEventArgs e) => await SendAsync();
 

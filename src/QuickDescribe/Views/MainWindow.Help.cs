@@ -191,20 +191,31 @@ public partial class MainWindow
     /// <summary>Help > Report a Bug…, or the offer after a crash with its log attached.</summary>
     private async Task ReportBugAsync(List<BugReport.Attachment> attachments, string? title)
     {
-        var report = new BugReport { SystemText = Privacy.Redact(await SystemCheckTextAsync()) };
-        if (title is not null) report.Title = title;
-        report.Attachments.AddRange(attachments);
-        var window = new BugReportWindow(report, BugReportRelay.Key) { Owner = this };
+        if (_reporting)
+        {
+            Announcer.Announce("Still preparing the bug report");
+            return;
+        }
+        _reporting = true;
         _dialogOpen = true;
         try
         {
-            window.ShowDialog();
+            // Asking Windows AI what it can do starts the helper, which takes a moment.
+            Announcer.Announce("Preparing a bug report");
+            var report = new BugReport { SystemText = Privacy.Redact(await SystemCheckTextAsync()) };
+            if (title is not null) report.Title = title;
+            report.Attachments.AddRange(attachments);
+            new BugReportWindow(report, BugReportRelay.Key) { Owner = this }.ShowDialog();
+            ResultBox.Focus();
         }
         finally
         {
+            _reporting = false;
             _dialogOpen = false;
         }
     }
+
+    private bool _reporting;
 
     /// <summary>What goes with a bug report: the version, Windows, and what Windows AI says it can do.</summary>
     internal async Task<string> SystemCheckTextAsync()

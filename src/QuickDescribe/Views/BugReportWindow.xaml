@@ -1,14 +1,14 @@
-<Window x:Class="QuickDescribe.Views.BugReportWindow"
+﻿<Window x:Class="QuickDescribe.Views.BugReportWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Report a Bug" Width="640" Height="720" MinWidth="480" MinHeight="520"
         WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
-    <!-- Help > Report a Bug…: the form, then what happened to it. -->
+    <!-- Help > Report a Bugâ€¦: the form, then what happened to it. -->
     <Grid Margin="14">
         <DockPanel x:Name="FormPanel">
             <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
                 <!-- For sighted people; screen readers hear "Sending", and the focused button keeps its name. -->
-                <TextBlock x:Name="SendingText" Text="Sending…" VerticalAlignment="Center" Margin="0,0,12,0" Visibility="Collapsed" />
+                <TextBlock x:Name="SendingText" Text="Sendingâ€¦" VerticalAlignment="Center" Margin="0,0,12,0" Visibility="Collapsed" />
                 <!-- Not the default button: Enter in a field mustn't send a report half written. -->
                 <Button x:Name="SendButton" Content="_Send" MinWidth="90" Padding="10,3" Click="Send_Click" />
                 <Button Content="Cancel" IsCancel="True" MinWidth="80" Padding="10,3" Margin="8,0,0,0" />
@@ -17,10 +17,11 @@
             <ScrollViewer VerticalScrollBarVisibility="Auto" Focusable="False">
                 <StackPanel>
                     <TextBlock Text="Kind" Margin="0,0,0,3" />
-                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                        <RadioButton x:Name="BugKind" Content="_Bug" GroupName="Kind" IsChecked="True" Margin="0,0,16,0" Checked="Kind_Checked"
+                    <!-- One Tab stop for the pair, as a radio group is in Windows; the arrows move between them. -->
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8" KeyboardNavigation.TabNavigation="Once" KeyboardNavigation.DirectionalNavigation="Cycle">
+                        <RadioButton x:Name="BugKind" Content="_Bug" GroupName="Kind" IsChecked="True" Margin="0,0,16,0" Checked="Kind_Checked" GotKeyboardFocus="Kind_Focused"
                                      AutomationProperties.Name="Kind: Bug" />
-                        <RadioButton x:Name="SuggestionKind" Content="Su_ggestion" GroupName="Kind" Checked="Kind_Checked"
+                        <RadioButton x:Name="SuggestionKind" Content="Su_ggestion" GroupName="Kind" Checked="Kind_Checked" GotKeyboardFocus="Kind_Focused"
                                      AutomationProperties.Name="Kind: Suggestion" />
                     </StackPanel>
                     <Label Content="_Title:" Target="{Binding ElementName=TitleBox}" Padding="0,0,0,3" />
@@ -81,3 +82,4 @@
         </StackPanel>
     </Grid>
 </Window>
+
