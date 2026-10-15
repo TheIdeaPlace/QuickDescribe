@@ -17,14 +17,10 @@ public static class TextRecognition
     /// misses letters under about 10 pixels high.</summary>
     internal const int EnlargeBelow = 1600;
 
-    /// <summary>The largest side sent to Windows AI's recognizer: the helper's own limit. A large photo goes at
-    /// <see cref="PhotoSide"/> instead, so its PNG stays under the helper's 20 MB.</summary>
+    /// <summary>The largest side sent to Windows AI's recognizer: the helper's own limit. A picture whose PNG is too big at
+    /// that (a camera photo; a screen's PNG is small at any size) goes again at <see cref="PhotoSide"/>.</summary>
     internal const uint MaxAISide = 4096;
     internal const uint PhotoSide = 2560;
-
-    /// <summary>Above this many pixels at <see cref="MaxAISide"/>, a picture is sent at <see cref="PhotoSide"/>. A 4K
-    /// screen (8.3 million) still goes whole; a camera photo doesn't.</summary>
-    internal const long PhotoPixels = 9_000_000;
 
     /// <summary>The largest PNG sent: the helper takes 20 MB, less room for the rest of the request.</summary>
     internal const int MaxPngBytes = 19 * 1024 * 1024;
@@ -48,8 +44,9 @@ public static class TextRecognition
         {
             try
             {
-                var side = SideFor(image.PixelWidth, image.PixelHeight);
-                var png = await Task.Run(() => Pictures.Png(image, side), cancel);
+                var png = await Task.Run(() => Pictures.Png(image, MaxAISide), cancel);
+                if (png.Length > MaxPngBytes && Math.Max(image.PixelWidth, image.PixelHeight) > PhotoSide)
+                    png = await Task.Run(() => Pictures.Png(image, PhotoSide), cancel);
                 if (png.Length <= MaxPngBytes)
                 {
                     var lines = await ai.ReadTextAsync(png, cancel);
@@ -68,14 +65,6 @@ public static class TextRecognition
         }
         cancel.ThrowIfCancellationRequested();
         return await ReadWithBuiltInOcrAsync(image);
-    }
-
-    /// <summary>The longest side to send Windows AI's recognizer a picture at.</summary>
-    internal static uint SideFor(int width, int height)
-    {
-        var scale = Pictures.FitScale(width, height, MaxAISide);
-        var pixels = (long)Math.Round(width * scale) * (long)Math.Round(height * scale);
-        return pixels > PhotoPixels ? PhotoSide : MaxAISide;
     }
 
     /// <summary>For tests: forget that Windows AI's recognizer was unavailable.</summary>

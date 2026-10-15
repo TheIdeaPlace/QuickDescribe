@@ -32,6 +32,13 @@ public partial class MainWindow : Window
     /// <summary>A dialog (Open Picture) is open: hotkeys wait until it's closed.</summary>
     private bool _dialogOpen;
 
+    /// <summary>A result that arrived while Quick Describe wasn't in front: spoken when it next is.</summary>
+    private string? _unspoken;
+
+    /// <summary>How long Windows takes to show the screen without Quick Describe once it's asked to leave it out of
+    /// captures: a frame or two.</summary>
+    private static readonly TimeSpan LeaveOutOfCapture = TimeSpan.FromMilliseconds(100);
+
     public MainWindow()
     {
         InitializeComponent();
@@ -43,6 +50,13 @@ public partial class MainWindow : Window
         ResultBox.Text = Welcome();
         SourceInitialized += OnSourceInitialized;
         Loaded += OnLoaded;
+        Activated += (_, _) =>
+        {
+            if (_unspoken is not { } text) return;
+            _unspoken = null;
+            ResultBox.Focus();
+            Announcer.Announce(text);
+        };
         Closed += (_, _) =>
         {
             _closing.Cancel();
@@ -55,9 +69,6 @@ public partial class MainWindow : Window
     private void OnSourceInitialized(object? sender, EventArgs e)
     {
         _handle = new WindowInteropHelper(this).Handle;
-        // Never in its own pictures: a screen or window taken while Quick Describe is still showing would otherwise read
-        // its last result back as part of the screen.
-        Native.SetWindowDisplayAffinity(_handle, Native.WDA_EXCLUDEFROMCAPTURE);
         _hotKeys = new HotKeys(HwndSource.FromHwnd(_handle));
         _hotKeys.Pressed += OnHotKey;
         if (_hotKeys.Unavailable.Count > 0)
@@ -138,8 +149,14 @@ public partial class MainWindow : Window
         var request = _requests.Start();
         Picture? picture;
         string? problem;
+        // Quick Describe still showing (switched away from without Escape) is left out of its own picture, which would
+        // otherwise read its last result back as part of the screen. Only for the moment of taking it: left out all the
+        // time, it would be missing from screen sharing and other people's screenshots too.
+        var hide = target != Target.Clipboard && IsVisible && WindowState != WindowState.Minimized &&
+                   Native.SetWindowDisplayAffinity(_handle, Native.WDA_EXCLUDEFROMCAPTURE);
         try
         {
+            if (hide) await Task.Delay(LeaveOutOfCapture);
             (picture, problem) = target switch
             {
                 Target.Screen => (ScreenCapture.Screen(foreground), null),
@@ -157,11 +174,16 @@ public partial class MainWindow : Window
             // Anything at all: said, rather than lost with Quick Describe still minimized.
             (picture, problem) = (null, $"The picture couldn't be taken: {ex.Message.Trim()}");
         }
+        finally
+        {
+            if (hide) Native.SetWindowDisplayAffinity(_handle, Native.WDA_NONE);
+        }
         if (!_requests.IsCurrent(request)) return;
         BringToFront();
         if (picture is null)
         {
             _requests.Finish(request);
+            _describing = null;
             ShowMessage(problem ?? "Nothing to describe.", null);
         }
         else
@@ -175,6 +197,7 @@ public partial class MainWindow : Window
     private async Task DescribeAsync(Picture picture, Request request)
     {
         _describing = picture.Source;
+        _unspoken = null;
         Title = $"Describing {picture.Source} - {AppInfo.Name}";
         ResultBox.Text = $"Describing {picture.Source}…";
         Announcer.Announce($"Describing {picture.Source}");
@@ -191,6 +214,7 @@ public partial class MainWindow : Window
         {
             if (!_requests.IsCurrent(request)) return;
             _requests.Finish(request);
+            _describing = null;
             ShowMessage($"{picture.Source} couldn't be described: {ex.Message.Trim()}", picture.Source);
             return;
         }
@@ -201,12 +225,16 @@ public partial class MainWindow : Window
         ResultBox.Text = result.BoxText();
         ResultBox.CaretIndex = 0;
         ResultBox.ScrollToHome();
-        // Spoken and focused only while Quick Describe is in front. Switched away from meanwhile, it doesn't take focus
-        // back or speak over another app: the result is here when you return.
+        // Spoken and focused only while Quick Describe is in front. Switched away from meanwhile (or never brought to the
+        // front), it doesn't take focus or speak over another app: it's spoken when you return.
         if (IsActive)
         {
             ResultBox.Focus();
             Announcer.Announce(result.Announcement());
+        }
+        else
+        {
+            _unspoken = result.Announcement();
         }
     }
 
@@ -426,6 +454,7 @@ public partial class MainWindow : Window
             Title = AppInfo.Name;
         }
         _describing = null;
+        _unspoken = null;
         var returnTo = _returnTo;
         _returnTo = IntPtr.Zero;
         WindowState = WindowState.Minimized;

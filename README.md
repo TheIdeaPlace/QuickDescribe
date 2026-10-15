@@ -26,9 +26,9 @@ Start Quick Describe. While it's running, these keys work from any app:
 
 Quick Describe comes to the front with "Describing…", and your screen reader says what it's describing. When it's done, it speaks the description and how many lines of text it found. The full result is in the Result box, where focus is, to read by line, word or character: the description first, then "Text in the picture:" and the text, line by line.
 
-Press **Escape** to go back to where you were. Quick Describe minimizes, and the hotkeys keep working. Pressed while it's still describing, Escape also stops that. If you switch to another app while it's describing, it doesn't pull you back or talk over that app: the result is waiting in Quick Describe when you return. **Alt+F4** quits, and the hotkeys stop.
+Press **Escape** to go back to where you were. Quick Describe minimizes, and the hotkeys keep working. Pressed while it's still describing, Escape also stops that. If you switch to another app while it's describing, it doesn't pull you back or talk over that app: the result is waiting in Quick Describe, and spoken, when you return. **Alt+F4** quits, and the hotkeys stop.
 
-Quick Describe never appears in its own pictures, so a screen described while it's showing is the screen behind it. A hotkey pressed while Quick Describe's Open Picture dialog is up just beeps.
+Quick Describe leaves itself out of its own pictures, so a screen described while it's showing is the screen behind it. (Only for that moment: screen sharing and screenshots see it as usual.) A hotkey pressed while Quick Describe's Open Picture dialog is up just beeps.
 
 In Quick Describe itself:
 

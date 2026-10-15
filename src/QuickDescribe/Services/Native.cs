@@ -30,7 +30,7 @@ internal static partial class Native
 
     public const int WM_HOTKEY = 0x0312;
     public const uint MOD_ALT = 0x1, MOD_CONTROL = 0x2, MOD_SHIFT = 0x4, MOD_NOREPEAT = 0x4000;
-    public const uint WDA_EXCLUDEFROMCAPTURE = 0x11;
+    public const uint WDA_NONE = 0, WDA_EXCLUDEFROMCAPTURE = 0x11;
     public const uint ASFW_ANY = unchecked((uint)-1);
     public const uint MONITOR_DEFAULTTONEAREST = 2;
     public const int DWMWA_EXTENDED_FRAME_BOUNDS = 9;

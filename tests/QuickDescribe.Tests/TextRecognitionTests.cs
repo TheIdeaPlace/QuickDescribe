@@ -8,14 +8,18 @@ public class TextRecognitionTests
 {
     public TextRecognitionTests() => TextRecognition.ForgetUnavailable();
 
-    [Theory]
-    [InlineData(2944, 1840, TextRecognition.MaxAISide)]  // a screen goes whole
-    [InlineData(3840, 2160, TextRecognition.MaxAISide)]  // so does 4K
-    [InlineData(4032, 3024, TextRecognition.PhotoSide)]  // a 12-megapixel photo goes smaller, to stay under 20 MB
-    [InlineData(8000, 6000, TextRecognition.PhotoSide)]
-    [InlineData(640, 480, TextRecognition.MaxAISide)]
-    public void SideFor_SendsPhotosSmallerThanScreens(int width, int height, uint side) =>
-        Assert.Equal(side, TextRecognition.SideFor(width, height));
+    [Fact]
+    public async Task AScreenSizedPicture_GoesToTheRecognizerWhole()
+    {
+        var helpers = new FakeHelpers();
+        using var ai = helpers.Client();
+        var picture = Drawn.Solid(3840, 2400, 255, 255, 255);
+        await TextRecognition.ReadLinesAsync(picture, ai, TestContext.Current.CancellationToken);
+        var png = Convert.FromBase64String((string)helpers.Started[0].Requests[0]["image"]!);
+        var frame = System.Windows.Media.Imaging.BitmapDecoder.Create(new MemoryStream(png),
+            System.Windows.Media.Imaging.BitmapCreateOptions.None, System.Windows.Media.Imaging.BitmapCacheOption.OnLoad).Frames[0];
+        Assert.Equal(3840, frame.PixelWidth); // under 4096: not shrunk, however many pixels
+    }
 
     [Fact]
     public async Task WhenWindowsAIsRecognizerFails_TheBuiltInOcrReads()
