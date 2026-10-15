@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Quick Describe's package: the app and its Windows AI helper, so one install from App Installer gives Quick Describe,
+     its Start menu entry, its uninstall entry in Settings, updates, and the package identity Windows' AI APIs require.
+     scripts\build-msix.ps1 fills in $ARCH$, $VERSION$ (four numbers), $DISPLAYNAME$ (AppInfo.Name) and $PUBLISHER$, which must equal the signing
+     certificate's subject exactly or Windows won't install it.
+
+     The app is App\QuickDescribe.exe; the helper is AI\QuickDescribeAI.exe, started by the app from its own package folder,
+     so it runs with the package's identity (the quickdescribe-ai.exe alias is for development and people). What Windows' AI APIs need, from Microsoft's
+     docs and confirmed on a Copilot+ PC: the systemAIModels capability, MaxVersionTested 10.0.26226.0 or later
+     ("Not declared by app" otherwise), and the Windows App Runtime framework (they don't work with a
+     self-contained Windows App SDK). -->
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:uap5="http://schemas.microsoft.com/appx/manifest/uap/windows10/5"
+  xmlns:desktop4="http://schemas.microsoft.com/appx/manifest/desktop/windows10/4"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  xmlns:systemai="http://schemas.microsoft.com/appx/manifest/systemai/windows10"
+  IgnorableNamespaces="uap uap5 desktop4 rescap systemai">
+
+  <Identity Name="TheIdeaPlace.QuickDescribe" Publisher="$PUBLISHER$" Version="$VERSION$" ProcessorArchitecture="$ARCH$" />
+
+  <Properties>
+    <DisplayName>$DISPLAYNAME$</DisplayName>
+    <PublisherDisplayName>Kelly Ford</PublisherDisplayName>
+    <Description>Describes the screen, a window, the focused item or a picture, with on-device AI.</Description>
+    <Logo>Assets\StoreLogo.png</Logo>
+  </Properties>
+
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.19041.0" MaxVersionTested="10.0.26226.0" />
+    <PackageDependency Name="Microsoft.WindowsAppRuntime.1.8" MinVersion="8000.994.2142.0"
+                       Publisher="CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US" />
+  </Dependencies>
+
+  <Resources>
+    <Resource Language="en-us" />
+  </Resources>
+
+  <Applications>
+    <Application Id="QuickDescribe" Executable="App\QuickDescribe.exe" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements DisplayName="$DISPLAYNAME$" Description="Describes the screen, a window, the focused item or a picture, with on-device AI"
+                          BackgroundColor="transparent" Square150x150Logo="Assets\Square150x150Logo.png"
+                          Square44x44Logo="Assets\Square44x44Logo.png">
+        <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png" ShortName="$DISPLAYNAME$" />
+      </uap:VisualElements>
+    </Application>
+    <Application Id="QuickDescribeAI" Executable="AI\QuickDescribeAI.exe" EntryPoint="Windows.FullTrustApplication"
+                 desktop4:Subsystem="console" desktop4:SupportsMultipleInstances="true">
+      <uap:VisualElements DisplayName="$DISPLAYNAME$ AI helper" Description="Describes pictures for $DISPLAYNAME$ with Windows' on-device model"
+                          BackgroundColor="transparent" Square150x150Logo="Assets\Square150x150Logo.png"
+                          Square44x44Logo="Assets\Square44x44Logo.png" AppListEntry="none" />
+      <Extensions>
+        <uap5:Extension Category="windows.appExecutionAlias">
+          <uap5:AppExecutionAlias desktop4:Subsystem="console">
+            <uap5:ExecutionAlias Alias="quickdescribe-ai.exe" />
+          </uap5:AppExecutionAlias>
+        </uap5:Extension>
+      </Extensions>
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <rescap:Capability Name="runFullTrust" />
+    <systemai:Capability Name="systemAIModels" />
+  </Capabilities>
+</Package>

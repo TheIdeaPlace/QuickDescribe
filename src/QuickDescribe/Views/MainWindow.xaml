@@ -1,0 +1,55 @@
+<Window x:Class="QuickDescribe.Views.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Quick Describe" Width="760" Height="560" MinWidth="420" MinHeight="300"
+        WindowStartupLocation="CenterScreen" AllowDrop="True"
+        Drop="OnDrop" DragOver="OnDragOver" PreviewKeyDown="OnPreviewKeyDown">
+    <DockPanel>
+        <!-- Not in the Tab or Ctrl+Tab order: a menu bar is reached with Alt or F10, as in every Windows app.
+             TabNavigation="None" is what does it (as in My Photo Library Described). Never IsTabStop="False" on the
+             menus themselves: WPF's arrow keys look for tab stops, so Right Arrow would stop moving between them. -->
+        <Menu DockPanel.Dock="Top" IsTabStop="False" KeyboardNavigation.TabNavigation="None"
+              KeyboardNavigation.ControlTabNavigation="None">
+            <MenuItem Header="_File">
+                <MenuItem x:Name="OpenItem" Header="_Open Picture…" InputGestureText="Ctrl+O" Click="OnOpen" />
+                <MenuItem x:Name="ClipboardItem" Header="Describe _Clipboard" Click="OnClipboard" />
+                <Separator />
+                <MenuItem Header="E_xit" InputGestureText="Alt+F4" Click="OnExit" />
+            </MenuItem>
+            <MenuItem Header="_Describe">
+                <MenuItem x:Name="ScreenItem" Header="_Screen" Click="OnScreen" />
+                <MenuItem x:Name="WindowItem" Header="Active _Window" Click="OnWindow" />
+                <MenuItem x:Name="FocusItem" Header="_Focused Item" Click="OnFocus" />
+                <Separator />
+                <MenuItem x:Name="KindMenu" Header="Description _Type" />
+            </MenuItem>
+            <MenuItem Header="_Edit">
+                <MenuItem Header="_Copy Result" InputGestureText="Ctrl+Shift+C" Click="OnCopy" />
+            </MenuItem>
+            <MenuItem Header="_Help">
+                <MenuItem Header="_Keyboard Shortcuts" InputGestureText="F1" Click="OnShortcuts" />
+                <MenuItem Header="Check _Windows AI" Click="OnCheckAI" />
+                <MenuItem Header="_About Quick Describe" Click="OnAbout" />
+            </MenuItem>
+        </Menu>
+
+        <!-- A grid rather than docking, so the Result box comes before the buttons in reading order, as it does on screen. -->
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <Label Grid.Row="0" Target="{Binding ElementName=ResultBox}" Content="_Result:" Margin="4,4,4,0" />
+            <!-- Read-only, but with a caret, so the result can be read by line, word and character. -->
+            <TextBox x:Name="ResultBox" Grid.Row="1" Margin="8,0,8,0" IsReadOnly="True" IsReadOnlyCaretVisible="True"
+                     TextWrapping="Wrap" AcceptsReturn="True" VerticalScrollBarVisibility="Auto"
+                     FontSize="15" AutomationProperties.Name="Result" />
+            <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="8">
+                <Button Content="Describe _Clipboard" Padding="10,4" Margin="0,0,8,0" Click="OnClipboard" />
+                <Button Content="_Open Picture…" Padding="10,4" Margin="0,0,8,0" Click="OnOpen" />
+                <Button Content="Co_py Result" Padding="10,4" Click="OnCopy" />
+            </StackPanel>
+        </Grid>
+    </DockPanel>
+</Window>

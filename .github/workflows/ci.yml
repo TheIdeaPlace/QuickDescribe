@@ -1,0 +1,62 @@
+name: CI
+
+# Builds and tests Quick Describe and its Windows AI helper, and checks the installer still packs.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    # WPF and the Windows SDK projection need a Windows runner.
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The whole history: the installer's version counts its commits.
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore QuickDescribe.sln
+
+      - name: Build
+        run: dotnet build QuickDescribe.sln --configuration Release --no-restore
+
+      # No test opens a window. The Windows AI tests skip themselves here: the runner has no NPU and no helper.
+      - name: Test
+        run: dotnet test --solution QuickDescribe.sln --configuration Release --no-build --report-xunit-trx --results-directory TestResults
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results
+          path: TestResults
+
+      # The installer, unsigned: checks the package still builds and bundles for both architectures. Windows installs
+      # only signed packages, so this one is for looking at, not installing.
+      - name: Build the installer (unsigned)
+        shell: pwsh
+        run: ./scripts/build-msix.ps1
+
+      - name: Upload the installer
+        uses: actions/upload-artifact@v7
+        with:
+          name: installer-unsigned
+          path: artifacts/msix
+          retention-days: 7
