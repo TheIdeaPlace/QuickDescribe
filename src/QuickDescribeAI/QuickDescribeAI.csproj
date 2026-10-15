@@ -31,7 +31,7 @@
     <WindowsAppSdkDeploymentManagerInitialize>false</WindowsAppSdkDeploymentManagerInitialize>
   </PropertyGroup>
   <ItemGroup>
-    <!-- The app's name, from one place (#34). -->
+    <!-- The app's name, from one place. -->
     <Compile Include="..\QuickDescribe\AppInfo.cs" Link="AppInfo.cs" />
   </ItemGroup>
   <ItemGroup>
@@ -42,7 +42,7 @@
     <TrimmerRootAssembly Include="WinRT.Runtime" />
     <TrimmerRootAssembly Include="Microsoft.Windows.AI.Projection" />
     <TrimmerRootAssembly Include="Microsoft.Windows.AI.Imaging.Projection" />
-    <!-- Phi Silica's ready state, for Check System (#94). -->
+    <!-- Phi Silica's ready state, for Check Windows AI. -->
     <TrimmerRootAssembly Include="Microsoft.Windows.AI.Text.Projection" />
     <TrimmerRootAssembly Include="Microsoft.Windows.AI.ContentSafety.Projection" />
     <TrimmerRootAssembly Include="Microsoft.Windows.AI.Foundation.Projection" />

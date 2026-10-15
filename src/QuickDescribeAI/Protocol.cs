@@ -1,5 +1,5 @@
 // The helper's protocol with Quick Describe. Plain C#, no Windows Runtime, so it is unit tested on any
-// machine (windows/tests/QuickDescribeAI.Tests), including CI runners with no NPU.
+// machine (tests/QuickDescribeAI.Tests), including CI runners with no NPU.
 //
 // Serve mode reads one JSON request per line on stdin and writes one JSON response per line on
 // stdout, in order. Requests:
@@ -158,7 +158,7 @@ public static class Protocol
 
     /// <summary>The readiness report for --check and --prepare.</summary>
     /// <param name="components">The ready state of Windows' other AI features ("textRecognition", "languageModel"), for
-    /// Quick Describe's Check System.</param>
+    /// Quick Describe's Check Windows AI.</param>
     public static string Readiness(bool identity, string state, string? message = null, IReadOnlyDictionary<string, string>? components = null)
     {
         var o = new JsonObject

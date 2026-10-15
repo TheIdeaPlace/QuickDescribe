@@ -1,17 +1,19 @@
 // Quick Describe's Windows AI helper: describes pictures with Windows' on-device model on a Copilot+ PC.
-// Adapted from Image Description Toolkit's helper (windows_ai_helper/IdtWindowsAI), same protocol.
+// Adapted from My Photo Library Described's helper (PhotoFinderAI, itself from Image Description Toolkit's), same protocol,
+// plus "op": "read" for Windows AI's text recognizer.
 //
 //   quickdescribe-ai --check                 readiness, as one JSON line
-//   quickdescribe-ai --details               --check plus text recognition's and Phi Silica's states, for Check System
+//   quickdescribe-ai --details               --check plus text recognition's and Phi Silica's states, for Check Windows AI
 //   quickdescribe-ai --prepare               make the model ready (may download it), as one JSON line
 //   quickdescribe-ai --serve                 JSON lines on stdin and stdout, for Quick Describe (see Server.cs)
 //   quickdescribe-ai --describe <picture> [kind ...]   describe one picture, for people
+//   quickdescribe-ai --read <picture>                  the text in one picture, line by line
 //   quickdescribe-ai --version
 //
-// Windows only lets a packaged app use the model, so this must run with its package's identity:
-// started as quickdescribe-ai (the command its package adds), not as QuickDescribeAI.exe from its
-// folder. Quick Describe always starts it by that command. Started without identity, as a person might, it
-// starts itself again through the command, tied to this process so it can't outlive it.
+// Windows only lets a packaged app use the model, so this must run with its package's identity. Installed, Quick
+// Describe starts it from its own package's AI folder, which gives it that identity; in development it starts it as
+// quickdescribe-ai (the command a registered helper's package adds). Started without identity, as a person might from
+// its folder, it starts itself again through the command, tied to this process so it can't outlive it.
 using System.ComponentModel;
 using QuickDescribeAI;
 
@@ -46,7 +48,7 @@ try
             return 0;
 
         case "--details":
-            // For Quick Describe's Check System: --check plus the other AI features' states. Kept apart from --check, which
+            // For Quick Describe's Check Windows AI: --check plus the other AI features' states. Kept apart from --check, which
             // every description waits on.
             Line(Protocol.Readiness(true, Describer.ReadyState(), components: Describer.OtherStates()));
             return 0;

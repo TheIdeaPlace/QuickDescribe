@@ -28,6 +28,9 @@ Windows AI needs the Copilot+ NPU, which the vmtest VMs don't have, so this app 
 - Windows AI's `ImageDescriptionGenerator` refuses most screens and windows with `ImageHasTooMuchText` (WindowsAppSDK #6855). Shrinking the picture until it accepts (about 256 pixels) gets descriptions that invent text ("CiWsers Veel"), so Quick Describe doesn't; it shows the text instead.
 - Windows AI's `TextRecognizer` reads screens far better than `Windows.Media.Ocr` (it keeps the "4" of "42 Harbor Road" beside a text box border, which the older OCR drops at every scale). The app uses it through the helper and falls back to `Windows.Media.Ocr` on PCs without it.
 - The focused item's area is sized in 100%-scaling pixels and multiplied by the monitor's scale; a fixed pixel size cut labels in half at 200%.
+- `SetWindowDisplayAffinity(WDA_EXCLUDEFROMCAPTURE)` keeps the window out of a GDI `BitBlt` of the screen too (checked on Kelly's PC), so a screen taken while Quick Describe shows doesn't read its own last result back.
+- `Requests` owns describing's sequencing: a new request or Escape cancels the last; messages (F1, Help) never do, or a result on its way is lost.
+- `WindowsAI` takes an `IHelperConnection` factory, so the client's pairing, restarts, timeouts and cancellation are tested against `FakeHelper` (tests) without a real helper.
 
 ## Releasing
 

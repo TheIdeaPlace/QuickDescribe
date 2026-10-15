@@ -1,0 +1,248 @@
+using System.Text.Json.Nodes;
+using QuickDescribe.Services;
+
+namespace QuickDescribe.Tests;
+
+/// <summary>The helper client against a fake helper: answers matched to requests, restarts, timeouts, giving up.</summary>
+public class HelperConnectionTests
+{
+    private static readonly Func<uint, Task<byte[]>> Jpeg = _ => Task.FromResult(new byte[] { 0xFF, 0xD8 });
+    private static CancellationToken Token => TestContext.Current.CancellationToken;
+
+    [Fact]
+    public async Task EachRequest_GetsItsOwnAnswer_FromOneHelper()
+    {
+        var helpers = new FakeHelpers();
+        using var ai = helpers.Client();
+        Assert.Equal("A description.", await ai.DescribeAsync(Jpeg, "brief", Token));
+        Assert.Equal(["Line one", "Line two"], await ai.ReadTextAsync([1, 2], Token));
+        var helper = Assert.Single(helpers.Started);
+        Assert.Equal(["brief", null], helper.Requests.Select(r => (string?)r["kind"]));
+        Assert.Equal("read", (string?)helper.Requests[1]["op"]);
+        Assert.NotEqual((int)helper.Requests[0]["id"]!, (int)helper.Requests[1]["id"]!);
+    }
+
+    [Fact]
+    public async Task AnAnswerToAnotherRequest_RestartsTheHelper()
+    {
+        var helpers = new FakeHelpers { Setup = h => h.Answer = r => FakeHelper.Ok(new JsonObject { ["id"] = (int)r["id"]! + 100 }) };
+        using var ai = helpers.Client();
+        var ex = await Assert.ThrowsAsync<DescriptionException>(() => ai.ReadTextAsync([1], Token));
+        Assert.Equal("bad_response", ex.Code);
+        Assert.True(helpers.Started[0].Killed);
+
+        helpers.Setup = null;
+        Assert.Equal(["Line one", "Line two"], await ai.ReadTextAsync([1], Token));
+        Assert.Equal(2, helpers.Started.Count); // a fresh one
+    }
+
+    [Fact]
+    public async Task AHelperThatStopsWithoutAnswering_IsAnInternalError_AndIsReplaced()
+    {
+        var helpers = new FakeHelpers { Setup = h => h.Answer = _ => null };
+        using var ai = helpers.Client();
+        var ex = await Assert.ThrowsAsync<DescriptionException>(() => ai.ReadTextAsync([1], Token));
+        Assert.Equal("internal_error", ex.Code);
+        helpers.Setup = null;
+        await ai.ReadTextAsync([1], Token);
+        Assert.Equal(2, helpers.Started.Count);
+    }
+
+    [Fact]
+    public async Task ASlowAnswer_TimesOut_AndTheHelperIsKilled()
+    {
+        var helpers = new FakeHelpers { Setup = h => h.Hold = new TaskCompletionSource() };
+        using var ai = helpers.Client(TimeSpan.FromMilliseconds(200));
+        var ex = await Assert.ThrowsAsync<DescriptionException>(() => ai.ReadTextAsync([1], Token));
+        Assert.Equal("timeout", ex.Code);
+        Assert.True(helpers.Started[0].Killed);
+    }
+
+    [Fact]
+    public async Task GivingUp_KillsTheHelper_SoItsLateAnswerCantBeReadAsTheNextOnes()
+    {
+        var helpers = new FakeHelpers { Setup = h => h.Hold = new TaskCompletionSource() };
+        using var ai = helpers.Client();
+        using var cancel = new CancellationTokenSource();
+        var reading = ai.ReadTextAsync([1], cancel.Token);
+        await Task.Delay(50, Token);
+        cancel.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => reading);
+        Assert.True(helpers.Started[0].Killed);
+    }
+
+    [Fact]
+    public async Task ARequestWaitingBehindAnother_CanBeGivenUp_WithoutTouchingTheHelper()
+    {
+        var hold = new TaskCompletionSource();
+        var helpers = new FakeHelpers { Setup = h => h.Hold = hold };
+        using var ai = helpers.Client();
+        var first = ai.ReadTextAsync([1], Token);
+        using var cancel = new CancellationTokenSource();
+        var second = ai.ReadTextAsync([2], cancel.Token);
+        cancel.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => second);
+        hold.SetResult();
+        Assert.Equal(["Line one", "Line two"], await first);
+        Assert.False(helpers.Started[0].Killed);
+        Assert.Single(helpers.Started[0].Requests);
+    }
+
+    [Fact]
+    public async Task AHelperThatWontStart_IsNotInstalled()
+    {
+        var helpers = new FakeHelpers { StartFailure = new DescriptionException("not_installed", "The helper didn't start.") };
+        using var ai = helpers.Client();
+        Assert.Equal("not_installed", (await Assert.ThrowsAsync<DescriptionException>(() => ai.ReadTextAsync([1], Token))).Code);
+    }
+
+    [Fact]
+    public async Task Disposing_WhileARequestIsInFlight_FailsIt_AndKillsTheHelper()
+    {
+        var helpers = new FakeHelpers { Setup = h => h.Hold = new TaskCompletionSource() };
+        var ai = helpers.Client();
+        var reading = ai.ReadTextAsync([1], Token);
+        await Task.Delay(50, Token);
+        ai.Dispose();
+        Assert.Equal("internal_error", (await Assert.ThrowsAsync<DescriptionException>(() => reading)).Code);
+        Assert.True(helpers.Started[0].Killed);
+        Assert.True(helpers.Started[0].Disposed);
+    }
+
+    [Fact]
+    public async Task AFailureTheHelperReports_KeepsTheHelper()
+    {
+        var helpers = new FakeHelpers { Setup = h => h.Answer = r => FakeHelper.Fail(r, "too_much_text") };
+        using var ai = helpers.Client();
+        Assert.Equal("too_much_text", (await Assert.ThrowsAsync<DescriptionException>(() => ai.DescribeAsync(Jpeg, "accessible", Token))).Code);
+        Assert.False(helpers.Started[0].Killed);
+        Assert.Single(helpers.Started[0].Requests); // too much text isn't tried again smaller
+    }
+
+    [Theory]
+    [InlineData("Ready", true)]
+    [InlineData("NotSupportedOnCurrentSystem", true)]
+    [InlineData("NotReady", false)]
+    [InlineData("DisabledByUser", false)]
+    [InlineData("Error", false)]
+    public void OnlyStatesThatCantChange_AreRememberedForTheSession(string state, bool final) =>
+        Assert.Equal(final, WindowsAI.IsFinal(state));
+}
+
+/// <summary>Describing and reading together, with a fake helper: one half failing never loses the other.</summary>
+[Collection("Text recognition")]
+public class DescribingTests
+{
+    private static CancellationToken Token => TestContext.Current.CancellationToken;
+    private static Task<AIReadiness> Ready(CancellationToken _) => Task.FromResult(new AIReadiness(true, "Ready", null));
+    private static Task<AIReadiness> NotSupported(CancellationToken _) =>
+        Task.FromResult(new AIReadiness(true, "NotSupportedOnCurrentSystem", "Needs a Copilot+ PC."));
+
+    public DescribingTests() => TextRecognition.ForgetUnavailable();
+
+    [Fact]
+    public async Task BothHalves_ComeBack()
+    {
+        var helpers = new FakeHelpers();
+        using var ai = helpers.Client();
+        var result = await Describing.RunAsync(Drawn.Solid(64, 64, 0, 0, 200), "brief", ai, Token, Ready);
+        Assert.Equal("A description.", result.Description);
+        Assert.Equal(["Line one", "Line two"], result.Lines);
+    }
+
+    [Fact]
+    public async Task TooMuchText_StillGivesTheText()
+    {
+        var helpers = new FakeHelpers { Setup = h => h.Answer = r => (string?)r["op"] == "read" ? FakeHelper.Ok(r) : FakeHelper.Fail(r, "too_much_text") };
+        using var ai = helpers.Client();
+        var result = await Describing.RunAsync(Drawn.Solid(64, 64, 0, 0, 200), "accessible", ai, Token, Ready);
+        Assert.Null(result.Description);
+        Assert.Equal("too_much_text", result.DescriptionCode);
+        Assert.Equal(["Line one", "Line two"], result.Lines);
+    }
+
+    [Fact]
+    public async Task NoWindowsAI_StillReadsTheText_WithTheBuiltInOcr()
+    {
+        if (Windows.Media.Ocr.OcrEngine.TryCreateFromUserProfileLanguages() is null) Assert.Skip("No OCR language on this PC.");
+        var helpers = new FakeHelpers { StartFailure = new DescriptionException("not_installed", "The helper didn't start.") };
+        using var ai = helpers.Client();
+        var result = await Describing.RunAsync(Drawn.Text(600, 120, 28, "Save Cancel Help"), "accessible", ai, Token, NotSupported);
+        Assert.Equal("unavailable", result.DescriptionCode);
+        Assert.Equal(["Save Cancel Help"], result.Lines);
+    }
+
+    [Fact]
+    public async Task ACheckThatThrows_IsAFailedDescription_NotALostResult()
+    {
+        var helpers = new FakeHelpers();
+        using var ai = helpers.Client();
+        var result = await Describing.RunAsync(Drawn.Solid(64, 64, 0, 0, 200), "brief", ai, Token,
+            _ => throw new InvalidOperationException("The helper went away."));
+        Assert.Equal("error", result.DescriptionCode);
+        Assert.Contains("The helper went away.", result.DescriptionProblem);
+        Assert.Equal(["Line one", "Line two"], result.Lines);
+    }
+
+    [Fact]
+    public async Task GivingUp_ThrowsRatherThanGivingAResult()
+    {
+        var helpers = new FakeHelpers { Setup = h => h.Hold = new TaskCompletionSource() };
+        using var ai = helpers.Client();
+        using var cancel = new CancellationTokenSource();
+        var running = Describing.RunAsync(Drawn.Solid(64, 64, 0, 0, 200), "brief", ai, cancel.Token, Ready);
+        await Task.Delay(100, Token);
+        cancel.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => running);
+    }
+}
+
+public class RequestsTests
+{
+    [Fact]
+    public void ANewRequest_GivesUpTheOneBefore()
+    {
+        var requests = new Requests();
+        var first = requests.Start();
+        var second = requests.Start();
+        Assert.True(first.Token.IsCancellationRequested);
+        Assert.False(requests.IsCurrent(first));
+        Assert.True(requests.IsCurrent(second));
+        Assert.True(requests.IsRunning);
+    }
+
+    [Fact]
+    public void Cancel_GivesUpTheRequest_AndSaysWhetherThereWasOne()
+    {
+        var requests = new Requests();
+        Assert.False(requests.Cancel());
+        var request = requests.Start();
+        Assert.True(requests.Cancel());
+        Assert.True(request.Token.IsCancellationRequested);
+        Assert.False(requests.IsCurrent(request));
+        Assert.False(requests.IsRunning);
+        Assert.False(requests.Cancel());
+    }
+
+    [Fact]
+    public void AFinishedRequest_IsNoLongerRunning_AndCancellingDoesNothing()
+    {
+        var requests = new Requests();
+        var request = requests.Start();
+        requests.Finish(request);
+        Assert.False(requests.IsRunning);
+        Assert.False(requests.Cancel());
+        Assert.False(request.Token.IsCancellationRequested);
+    }
+
+    [Fact]
+    public void FinishingAnOldRequest_LeavesTheNewOneRunning()
+    {
+        var requests = new Requests();
+        var old = requests.Start();
+        var current = requests.Start();
+        requests.Finish(old);
+        Assert.True(requests.IsRunning);
+        Assert.True(requests.IsCurrent(current));
+    }
+}

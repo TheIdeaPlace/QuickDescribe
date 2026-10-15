@@ -3,11 +3,11 @@
 Builds Quick Describe's Windows AI helper for one architecture and lays out its package.
 
 .DESCRIPTION
-Publishes QuickDescribeAI self-contained into windows\out\ai\<arch>, then writes AppxManifest.xml there with
+Publishes QuickDescribeAI self-contained into out\ai\<arch>, then writes AppxManifest.xml there with
 the architecture, version and publisher filled in, beside the logos. That folder is a complete
 package layout:
   - in Developer Mode, -Register installs it straight from the folder, for development;
-  - -Pack packs it into windows\artifacts\QuickDescribeAI_<arch>.msix, which a release signs and
+  - -Pack packs it into artifacts\QuickDescribeAI_<arch>.msix, which a release signs and
     ships beside Quick Describe.
 
 .PARAMETER Arch
@@ -18,7 +18,7 @@ The package publisher. For a signed release it must equal the signing certificat
 exactly. The default is for unsigned development builds.
 
 .PARAMETER Version
-The version, as up to three numbers. Defaults to windows\VERSION, Quick Describe's own version.
+The version, as up to three numbers. Defaults to VERSION, Quick Describe's own version.
 
 .PARAMETER Revision
 The package version's fourth number. Windows won't install a package over one of the same
@@ -30,7 +30,7 @@ number). 0 to 65535.
 Install the built layout for the current user (needs Developer Mode).
 
 .PARAMETER Pack
-Also pack the layout into windows\artifacts\QuickDescribeAI_<arch>.msix.
+Also pack the layout into artifacts\QuickDescribeAI_<arch>.msix.
 
 .EXAMPLE
 .\scripts\build-ai-helper.ps1 -Register
@@ -64,7 +64,7 @@ if (Test-Path -LiteralPath $out) { Remove-Item -LiteralPath $out -Recurse -Force
 dotnet publish $project -c $Configuration -r "win-$Arch" -o $out --nologo "-p:Version=$assemblyVersion"
 if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed for $Arch." }
 
-# The display name, from the one place the app keeps it (AppInfo.Name, #34).
+# The display name, from the one place the app keeps it (AppInfo.Name).
 $appInfo = Get-Content -LiteralPath (Join-Path $windows 'src\QuickDescribe\AppInfo.cs') -Raw -Encoding UTF8
 if ($appInfo -notmatch 'const string Name = "([^"]+)"') { throw "AppInfo.cs has no Name constant." }
 $displayName = [Security.SecurityElement]::Escape($Matches[1])

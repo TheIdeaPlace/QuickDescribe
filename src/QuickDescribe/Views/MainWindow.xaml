@@ -29,16 +29,23 @@
             </MenuItem>
         </Menu>
 
-        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="8">
-            <Button x:Name="ClipboardButton" Content="Describe _Clipboard" Padding="10,4" Margin="0,0,8,0" Click="OnClipboard" />
-            <Button Content="_Open Picture…" Padding="10,4" Margin="0,0,8,0" Click="OnOpen" />
-            <Button Content="Co_py Result" Padding="10,4" Click="OnCopy" />
-        </StackPanel>
-
-        <Label DockPanel.Dock="Top" Target="{Binding ElementName=ResultBox}" Content="_Result:" Margin="4,4,4,0" />
-        <!-- Read-only, but with a caret, so the result can be read by line, word and character. -->
-        <TextBox x:Name="ResultBox" Margin="8,0,8,0" IsReadOnly="True" IsReadOnlyCaretVisible="True"
-                 TextWrapping="Wrap" AcceptsReturn="True" VerticalScrollBarVisibility="Auto"
-                 FontSize="15" AutomationProperties.Name="Result" />
+        <!-- A grid rather than docking, so the Result box comes before the buttons in reading order, as it does on screen. -->
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <Label Grid.Row="0" Target="{Binding ElementName=ResultBox}" Content="_Result:" Margin="4,4,4,0" />
+            <!-- Read-only, but with a caret, so the result can be read by line, word and character. -->
+            <TextBox x:Name="ResultBox" Grid.Row="1" Margin="8,0,8,0" IsReadOnly="True" IsReadOnlyCaretVisible="True"
+                     TextWrapping="Wrap" AcceptsReturn="True" VerticalScrollBarVisibility="Auto"
+                     FontSize="15" AutomationProperties.Name="Result" />
+            <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="8">
+                <Button Content="Describe _Clipboard" Padding="10,4" Margin="0,0,8,0" Click="OnClipboard" />
+                <Button Content="_Open Picture…" Padding="10,4" Margin="0,0,8,0" Click="OnOpen" />
+                <Button Content="Co_py Result" Padding="10,4" Click="OnCopy" />
+            </StackPanel>
+        </Grid>
     </DockPanel>
 </Window>

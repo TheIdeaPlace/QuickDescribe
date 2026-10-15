@@ -17,36 +17,69 @@ public static class TextRecognition
     /// misses letters under about 10 pixels high.</summary>
     internal const int EnlargeBelow = 1600;
 
-    /// <summary>The largest side sent to Windows AI's recognizer: the helper's own limit.</summary>
+    /// <summary>The largest side sent to Windows AI's recognizer: the helper's own limit. A large photo goes at
+    /// <see cref="PhotoSide"/> instead, so its PNG stays under the helper's 20 MB.</summary>
     internal const uint MaxAISide = 4096;
+    internal const uint PhotoSide = 2560;
+
+    /// <summary>Above this many pixels at <see cref="MaxAISide"/>, a picture is sent at <see cref="PhotoSide"/>. A 4K
+    /// screen (8.3 million) still goes whole; a camera photo doesn't.</summary>
+    internal const long PhotoPixels = 9_000_000;
+
+    /// <summary>The largest PNG sent: the helper takes 20 MB, less room for the rest of the request.</summary>
+    internal const int MaxPngBytes = 19 * 1024 * 1024;
 
     public const string NoLanguageMessage =
         "Windows has no text recognition for your languages. Add a language with its Optical character recognition feature in Settings, Time & language.";
 
-    /// <summary>Set once Windows AI's recognizer has said it can't be used on this PC, so it isn't asked again.</summary>
-    private static volatile bool _noAIRecognizer;
+    /// <summary>When Windows AI's recognizer last said it can't be used on this PC; it's asked again after
+    /// <see cref="RetryAfter"/>, since it may have been getting ready or turned off in Settings.</summary>
+    private static DateTime? _aiUnavailableAt;
+    private static readonly TimeSpan RetryAfter = TimeSpan.FromMinutes(5);
 
-    /// <summary>The helper's codes that mean the recognizer won't work on this PC at all, as opposed to this picture.</summary>
+    /// <summary>The helper's codes that mean the recognizer won't work on this PC for now, as opposed to this picture.</summary>
     private static readonly string[] Unavailable = ["not_installed", "not_supported", "disabled_by_user", "not_ready"];
 
-    /// <summary>The lines of text found, top to bottom. Call on the UI thread and await.</summary>
+    /// <summary>The lines of text found, top to bottom: from Windows AI's recognizer when it can, otherwise, or when it fails
+    /// in any way, from the built-in OCR. Call on the UI thread and await.</summary>
     public static async Task<IReadOnlyList<string>> ReadLinesAsync(BitmapSource image, WindowsAI? ai, CancellationToken cancel = default)
     {
-        if (ai is not null && !_noAIRecognizer && WindowsAI.IsInstalled)
+        if (ai is not null && (_aiUnavailableAt is not { } at || DateTime.UtcNow - at > RetryAfter))
         {
             try
             {
-                var png = await Task.Run(() => Pictures.Png(image, MaxAISide), cancel);
-                return await ai.ReadTextAsync(png, cancel);
+                var side = SideFor(image.PixelWidth, image.PixelHeight);
+                var png = await Task.Run(() => Pictures.Png(image, side), cancel);
+                if (png.Length <= MaxPngBytes)
+                {
+                    var lines = await ai.ReadTextAsync(png, cancel);
+                    _aiUnavailableAt = null;
+                    return lines;
+                }
             }
-            catch (DescriptionException ex)
+            catch (DescriptionException ex) when (Unavailable.Contains(ex.Code))
             {
-                if (Unavailable.Contains(ex.Code)) _noAIRecognizer = true;
-                // Otherwise this picture only: the built-in OCR tries it.
+                _aiUnavailableAt = DateTime.UtcNow;
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // This picture only (too much for the helper, say): the built-in OCR tries it.
             }
         }
+        cancel.ThrowIfCancellationRequested();
         return await ReadWithBuiltInOcrAsync(image);
     }
+
+    /// <summary>The longest side to send Windows AI's recognizer a picture at.</summary>
+    internal static uint SideFor(int width, int height)
+    {
+        var scale = Pictures.FitScale(width, height, MaxAISide);
+        var pixels = (long)Math.Round(width * scale) * (long)Math.Round(height * scale);
+        return pixels > PhotoPixels ? PhotoSide : MaxAISide;
+    }
+
+    /// <summary>For tests: forget that Windows AI's recognizer was unavailable.</summary>
+    internal static void ForgetUnavailable() => _aiUnavailableAt = null;
 
     /// <summary>Windows' built-in OCR (Windows.Media.Ocr).</summary>
     public static async Task<IReadOnlyList<string>> ReadWithBuiltInOcrAsync(BitmapSource image)

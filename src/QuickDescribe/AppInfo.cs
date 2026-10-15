@@ -19,5 +19,4 @@ internal static class AppInfo
     public const string InstallerFile = "QuickDescribe.appinstaller";
 
     public const string Repository = "TheIdeaPlace/QuickDescribe";
-    public const string ReadmeUrl = $"https://github.com/{Repository}#readme";
 }

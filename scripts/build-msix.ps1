@@ -7,13 +7,13 @@ and a QuickDescribe.appinstaller file that installs both.
 Opening QuickDescribe.appinstaller shows Windows' App Installer: Quick Describe's name, publisher and icon and an
 Install button. It installs the Windows App Runtime first if the PC doesn't have it, then Quick Describe for the
 PC's architecture, with a Start menu entry and an uninstall entry in Settings > Apps. Later builds published to
-the same place are installed as updates: Windows checks every few hours, and Help > Check for Updates checks now.
+the same place are installed as updates: Windows checks every few hours.
 
-For each architecture it lays out the package in windows\out\msix\<arch>:
+For each architecture it lays out the package in out\msix\<arch>:
   App\        Quick Describe, self-contained (no .NET install needed)
   AI\         the Windows AI helper, self-contained; Quick Describe starts it from here
   Assets\     the logos, with resources.pri at the root so Windows picks the right size
-  AppxManifest.xml   from windows\packaging, with the architecture, version and publisher filled in
+  AppxManifest.xml   from packaging, with the architecture, version and publisher filled in
 then packs it, bundles both architectures, and writes everything to -Destination:
   QuickDescribe.appinstaller
   QuickDescribe_<version>.msixbundle
@@ -30,7 +30,7 @@ from. Testers should get builds of main: a branch's extra commits count higher t
 PowerShell 5.1 compatible.
 
 .PARAMETER Destination
-Where the installer files go. Defaults to windows\artifacts\msix.
+Where the installer files go. Defaults to artifacts\msix.
 
 .PARAMETER BaseUri
 Where the files will be downloaded from, which App Installer also checks for updates: an https address for a
@@ -228,8 +228,7 @@ $appInstaller = @"
   <Dependencies>
 $($dependencyXml -join "`r`n")
   </Dependencies>
-  <!-- Windows checks every few hours and updates Quick Describe while it isn't running; Help > Check for Updates
-       checks now. Not OnLaunch: in My Photo Library Described, checking at each launch stopped the AI helper's
+  <!-- Windows checks every few hours and updates Quick Describe while it isn't running. Not OnLaunch: in My Photo Library Described, checking at each launch stopped the AI helper's
        alias from starting ("The file cannot be accessed by the system"), found 10/11/2026. -->
   <UpdateSettings>
     <AutomaticBackgroundTask />

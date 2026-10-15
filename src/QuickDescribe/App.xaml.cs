@@ -17,7 +17,11 @@ public partial class App : Application
         _showSignal = new EventWaitHandle(false, EventResetMode.AutoReset, InstanceName + ".Show");
         if (!first)
         {
+            // This copy was just started by the person, so it may bring a window to the front; the first copy, signalled
+            // from here, hasn't had input and Windows would only flash its taskbar button. Hand the right on.
+            Services.Native.AllowSetForegroundWindow(Services.Native.ASFW_ANY);
             _showSignal.Set();
+            _showSignal.Dispose();
             Shutdown();
             return;
         }
@@ -41,6 +45,7 @@ public partial class App : Application
     protected override void OnExit(ExitEventArgs e)
     {
         _instance?.Dispose();
+        _showSignal?.Dispose();
         base.OnExit(e);
     }
 }

@@ -46,13 +46,30 @@ public sealed class WindowsAI : IDisposable
     public const uint FirstSize = 2048;
     public static readonly uint[] RetrySizes = [1024, 512];
 
-    private static readonly TimeSpan DescribeTimeout = TimeSpan.FromMinutes(3);
     private static readonly TimeSpan CheckTimeout = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan PrepareTimeout = TimeSpan.FromMinutes(15);
 
+    /// <summary>How long an answer about the model is trusted when it isn't final: it may be getting ready, or be turned on
+    /// in Settings. Ready, and not supported on this PC, are trusted for the session.</summary>
+    private static readonly TimeSpan RecheckAfter = TimeSpan.FromMinutes(5);
+
     private readonly SemaphoreSlim _gate = new(1, 1);
-    private Process? _server;
+    private readonly Func<IHelperConnection> _start;
+    private readonly TimeSpan _timeout;
+    private IHelperConnection? _server;
     private int _nextId;
+
+    public WindowsAI() : this(StartServer, TimeSpan.FromMinutes(3))
+    {
+    }
+
+    /// <summary>For tests: <paramref name="start"/> gives the helper to talk to, and <paramref name="timeout"/> is how long
+    /// an answer may take.</summary>
+    internal WindowsAI(Func<IHelperConnection> start, TimeSpan timeout)
+    {
+        _start = start;
+        _timeout = timeout;
+    }
 
     public static string AliasPath =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Microsoft", "WindowsApps", Alias);
@@ -82,24 +99,29 @@ public sealed class WindowsAI : IDisposable
     public static readonly string NotInstalledMessage =
         $"Describing uses Windows' on-device AI on Copilot+ PCs, through the {AppInfo.HelperName}, which isn't installed on this PC.";
 
-    private static AIReadiness? _ready;
+    private static (AIReadiness Readiness, DateTime At)? _checked;
 
-    /// <summary>Whether the model can be used, from the helper's --check. Once Ready, that's remembered.</summary>
+    /// <summary>Whether the model can be used, from the helper's --check, remembered so each picture doesn't start another
+    /// helper to ask (see <see cref="RecheckAfter"/>).</summary>
     public static async Task<AIReadiness> CheckAsync(CancellationToken cancel = default)
     {
         if (!IsInstalled) return new AIReadiness(false, "NotInstalled", NotInstalledMessage);
-        if (_ready is not null) return _ready;
+        if (_checked is { } known && (IsFinal(known.Readiness.State) || DateTime.UtcNow - known.At < RecheckAfter)) return known.Readiness;
+        AIReadiness readiness;
         try
         {
-            var readiness = ParseReadiness(await RunOnceAsync("--check", CheckTimeout, cancel));
-            if (readiness.State == "Ready") _ready = readiness;
-            return readiness;
+            readiness = ParseReadiness(await RunOnceAsync("--check", CheckTimeout, cancel));
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            return new AIReadiness(false, "Error", $"The {AppInfo.HelperName} didn't start: {ex.Message}");
+            readiness = new AIReadiness(false, "Error", $"The {AppInfo.HelperName} didn't start: {ex.Message}");
         }
+        _checked = (readiness, DateTime.UtcNow);
+        return readiness;
     }
+
+    /// <summary>States that won't change while Quick Describe runs.</summary>
+    internal static bool IsFinal(string state) => state is "Ready" or "NotSupportedOnCurrentSystem";
 
     /// <summary>The helper's --details: its readiness plus the other Windows AI features' states, for Check Windows AI.</summary>
     public static async Task<AIReadiness> DetailsAsync(CancellationToken cancel = default)
@@ -116,8 +138,12 @@ public sealed class WindowsAI : IDisposable
     }
 
     /// <summary>Gets the model ready, which the first time can mean a download of several minutes.</summary>
-    public static async Task<AIReadiness> PrepareAsync(CancellationToken cancel = default) =>
-        ParseReadiness(await RunOnceAsync("--prepare", PrepareTimeout, cancel));
+    public static async Task<AIReadiness> PrepareAsync(CancellationToken cancel = default)
+    {
+        var readiness = ParseReadiness(await RunOnceAsync("--prepare", PrepareTimeout, cancel));
+        _checked = (readiness, DateTime.UtcNow);
+        return readiness;
+    }
 
     internal static AIReadiness ParseReadiness(string? line)
     {
@@ -198,17 +224,16 @@ public sealed class WindowsAI : IDisposable
             var server = EnsureServer();
             string? line;
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancel);
-            timeout.CancelAfter(DescribeTimeout);
+            timeout.CancelAfter(_timeout);
             try
             {
-                await server.StandardInput.WriteAsync(request + "\n");
-                await server.StandardInput.FlushAsync(timeout.Token);
-                line = await server.StandardOutput.ReadLineAsync(timeout.Token);
+                await server.WriteLineAsync(request, timeout.Token);
+                line = await server.ReadLineAsync(timeout.Token);
             }
             catch (Exception ex)
             {
-                // The helper may still answer this request later, and that answer would then be read as the next one's.
-                // A fresh helper keeps answers and requests in step.
+                // Given up or failed: the helper may still answer this request later, and that answer would then be read as
+                // the next one's. A fresh helper keeps answers and requests in step.
                 StopServer();
                 if (ex is OperationCanceledException && !cancel.IsCancellationRequested)
                     throw new DescriptionException("timeout", "Windows took too long with this picture. Try again.");
@@ -308,30 +333,40 @@ public sealed class WindowsAI : IDisposable
         }
     }
 
-    private Process EnsureServer()
+    private IHelperConnection EnsureServer()
     {
         if (_server is { HasExited: false }) return _server;
         _server?.Dispose();
-        if (!IsInstalled) throw new DescriptionException("not_installed", NotInstalledMessage);
-        _server = Process.Start(StartInfo("--serve")) ?? throw new DescriptionException("not_installed", NotInstalledMessage);
-        // Its stderr is only progress notes ("getting the model ready"); read it so it never fills up and blocks.
-        _server.ErrorDataReceived += (_, _) => { };
-        _server.BeginErrorReadLine();
+        _server = null;
+        _server = _start();
         return _server;
+    }
+
+    /// <summary>Starts the helper's --serve. A helper that can't be started (missing, or an alias Windows can't open) is
+    /// not_installed, as if it weren't there, so text reading falls back to the built-in OCR.</summary>
+    private static IHelperConnection StartServer()
+    {
+        if (!IsInstalled) throw new DescriptionException("not_installed", NotInstalledMessage);
+        Process? process;
+        try
+        {
+            process = Process.Start(StartInfo("--serve"));
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException or IOException)
+        {
+            throw new DescriptionException("not_installed", $"The {AppInfo.HelperName} didn't start: {ex.Message.Trim()}");
+        }
+        if (process is null) throw new DescriptionException("not_installed", NotInstalledMessage);
+        // Its stderr is only progress notes ("getting the model ready"); read it so it never fills up and blocks.
+        process.ErrorDataReceived += (_, _) => { };
+        process.BeginErrorReadLine();
+        return new ProcessConnection(process);
     }
 
     private void StopServer()
     {
-        if (_server is null) return;
-        try
-        {
-            _server.Kill(entireProcessTree: true);
-        }
-        catch (Exception)
-        {
-            // Already gone.
-        }
-        _server.Dispose();
+        _server?.Kill();
+        _server?.Dispose();
         _server = null;
     }
 
@@ -373,9 +408,56 @@ public sealed class WindowsAI : IDisposable
         }
     }
 
-    public void Dispose()
+    /// <summary>Ends the helper. A request still waiting for it fails, as when the helper stops. (The gate isn't
+    /// disposed: such a request still releases it.)</summary>
+    public void Dispose() => StopServer();
+}
+
+/// <summary>The running helper, as <see cref="WindowsAI"/> talks to it: one line in, one line out. A fake in tests.</summary>
+internal interface IHelperConnection : IDisposable
+{
+    bool HasExited { get; }
+    Task WriteLineAsync(string line, CancellationToken cancel);
+
+    /// <summary>The next answer line, or null when the helper has stopped.</summary>
+    Task<string?> ReadLineAsync(CancellationToken cancel);
+
+    /// <summary>Ends the helper now, whatever it's doing.</summary>
+    void Kill();
+}
+
+internal sealed class ProcessConnection(Process process) : IHelperConnection
+{
+    public bool HasExited
     {
-        StopServer();
-        _gate.Dispose();
+        get
+        {
+            try { return process.HasExited; }
+            catch (InvalidOperationException) { return true; }
+        }
     }
+
+    public async Task WriteLineAsync(string line, CancellationToken cancel)
+    {
+        await process.StandardInput.WriteAsync(line.AsMemory(), cancel);
+        await process.StandardInput.WriteAsync("\n".AsMemory(), cancel);
+        await process.StandardInput.FlushAsync(cancel);
+    }
+
+    public Task<string?> ReadLineAsync(CancellationToken cancel) => process.StandardOutput.ReadLineAsync(cancel).AsTask();
+
+    public void Kill()
+    {
+        try
+        {
+            // Killed outright rather than waited for: a helper partway through a description would hold things up.
+            process.Kill(entireProcessTree: true);
+        }
+        catch (Exception)
+        {
+            // Already gone.
+        }
+    }
+
+    public void Dispose() => process.Dispose();
 }

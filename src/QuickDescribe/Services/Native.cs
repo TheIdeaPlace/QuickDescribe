@@ -29,7 +29,9 @@ internal static partial class Native
     }
 
     public const int WM_HOTKEY = 0x0312;
-    public const uint MOD_ALT = 0x1, MOD_CONTROL = 0x2, MOD_SHIFT = 0x4, MOD_WIN = 0x8, MOD_NOREPEAT = 0x4000;
+    public const uint MOD_ALT = 0x1, MOD_CONTROL = 0x2, MOD_SHIFT = 0x4, MOD_NOREPEAT = 0x4000;
+    public const uint WDA_EXCLUDEFROMCAPTURE = 0x11;
+    public const uint ASFW_ANY = unchecked((uint)-1);
     public const uint MONITOR_DEFAULTTONEAREST = 2;
     public const int DWMWA_EXTENDED_FRAME_BOUNDS = 9;
     public const int SM_XVIRTUALSCREEN = 76, SM_YVIRTUALSCREEN = 77, SM_CXVIRTUALSCREEN = 78, SM_CYVIRTUALSCREEN = 79;
@@ -45,6 +47,17 @@ internal static partial class Native
 
     [LibraryImport("user32.dll")]
     public static partial IntPtr GetForegroundWindow();
+
+    /// <summary>Keeps a window out of screen captures (Windows 10 2004 and later); it still shows on the screen.</summary>
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool SetWindowDisplayAffinity(IntPtr hWnd, uint affinity);
+
+    /// <summary>Lets another process bring its window to the front, which Windows otherwise blocks for a process that hasn't
+    /// had input.</summary>
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool AllowSetForegroundWindow(uint processId);
 
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
@@ -80,8 +93,6 @@ internal static partial class Native
     [LibraryImport("dwmapi.dll")]
     public static partial int DwmGetWindowAttribute(IntPtr hWnd, int attribute, out RECT value, int size);
 
-    [LibraryImport("dwmapi.dll")]
-    public static partial int DwmGetWindowAttribute(IntPtr hWnd, int attribute, out int value, int size);
 
     [LibraryImport("user32.dll")]
     public static partial IntPtr MonitorFromWindow(IntPtr hWnd, uint flags);
