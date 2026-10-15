@@ -195,6 +195,50 @@ public sealed class WindowsAI : IDisposable
         return ParseLines(await SendAsync(BuildReadRequest(id, png), id, cancel), id);
     }
 
+    /// <summary>
+    /// Has Windows load its models before they're needed: the first description in a session took 6 to 18 seconds on a
+    /// Copilot+ PC, and later ones about 3 (measured 15 Oct 2026). Describes and reads a tiny blank picture through this
+    /// helper, so the helper is running and Windows has both models loaded when the first real picture comes. A request
+    /// made meanwhile queues behind it, so it waits no longer than it would have for the cold load anyway. One try each,
+    /// within <see cref="WarmUpTimeout"/>: a warm-up that fails isn't retried at other sizes, as a real picture is, so it
+    /// can't hold the helper for minutes. Returns how long it took; throws when it didn't work.
+    /// </summary>
+    public async Task<TimeSpan> WarmUpAsync(CancellationToken cancel = default)
+    {
+        var started = Stopwatch.StartNew();
+        using var limit = CancellationTokenSource.CreateLinkedTokenSource(cancel);
+        limit.CancelAfter(WarmUpTimeout);
+        cancel = limit.Token;
+        var (jpeg, png) = await Task.Run(() =>
+        {
+            var blank = System.Windows.Media.Imaging.BitmapSource.Create(64, 64, 96, 96, System.Windows.Media.PixelFormats.Bgr32, null,
+                Enumerable.Repeat((byte)200, 64 * 64 * 4).ToArray(), 64 * 4);
+            blank.Freeze();
+            return (Pictures.Jpeg(blank, 64), Pictures.Png(blank, 64));
+        }, cancel);
+        try
+        {
+            var id = Interlocked.Increment(ref _nextId);
+            ParseResponse(await SendAsync(BuildRequest(id, "brief", jpeg), id, cancel), id);
+        }
+        catch (DescriptionException ex) when (ex.Code is "too_much_text" or "content_filtered" or "empty")
+        {
+            // A verdict on the blank picture: the model loaded all the same.
+        }
+        try
+        {
+            await ReadTextAsync(png, cancel);
+        }
+        catch (DescriptionException ex) when (ex.Code is "not_supported" or "disabled_by_user" or "not_ready")
+        {
+            // A PC without Windows AI's text recognizer: the built-in OCR reads text there, and needs no warming.
+        }
+        return started.Elapsed;
+    }
+
+    /// <summary>The longest warming up may take: a cold load is 6 to 18 seconds.</summary>
+    internal static TimeSpan WarmUpTimeout { get; set; } = TimeSpan.FromSeconds(60);
+
     /// <summary>Tries the first size, then smaller ones while the model reports an internal error. Any other failure
     /// (content filter, too much text) is final.</summary>
     internal static async Task<T> WithRetriesAsync<T>(Func<uint, Task<byte[]>> jpegAtSize, Func<byte[], Task<T>> describe)

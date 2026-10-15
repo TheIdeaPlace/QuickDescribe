@@ -93,17 +93,39 @@ public partial class MainWindow : Window
         $"Another app already uses {string.Join(", ", _hotKeys!.Unavailable.Select(HotKeys.GestureFor))}, so " +
         "those don't work from other apps. The Describe menu still does the same.";
 
-    /// <summary>Gets Windows' model ready in the background if it only needs downloading, so the first description isn't
-    /// the one that waits for it.</summary>
-    private static async Task GetModelReadyAsync(CancellationToken cancel)
+    /// <summary>Gets Windows' model ready in the background if it only needs downloading, then warms it up, so the first
+    /// description isn't the one that waits for either. Not on energy saver, where the person has asked Windows to save
+    /// power; the first description then just takes longer.</summary>
+    private async Task GetModelReadyAsync(CancellationToken cancel)
     {
         try
         {
-            if ((await WindowsAI.CheckAsync(cancel)).State == "NotReady") await WindowsAI.PrepareAsync(cancel);
+            var readiness = await WindowsAI.CheckAsync(cancel);
+            if (readiness.State == "NotReady") readiness = await WindowsAI.PrepareAsync(cancel);
+            if (readiness.State != "Ready" || EnergySaverOn()) return;
+            var took = await _ai.WarmUpAsync(cancel);
+            Log.Write("helper", $"Warmed up in {took.TotalSeconds:0.0} s");
+        }
+        catch (OperationCanceledException)
+        {
+            // Closing.
+        }
+        catch (Exception ex)
+        {
+            // Describing says what's wrong when it's asked for.
+            Log.Write("helper", $"Warming up didn't work: {ex.GetType().Name}: {ex.Message}");
+        }
+    }
+
+    private static bool EnergySaverOn()
+    {
+        try
+        {
+            return Windows.System.Power.PowerManager.EnergySaverStatus == Windows.System.Power.EnergySaverStatus.On;
         }
         catch (Exception)
         {
-            // Describing says what's wrong when it's asked for.
+            return false;
         }
     }
 

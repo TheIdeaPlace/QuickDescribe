@@ -33,3 +33,24 @@ public class ScreenTrialTests
     }
 }
 
+
+/// <summary>Warming up against Windows' real model: how long it takes, and how long the first picture after it takes. Only
+/// when QD_SCREEN_TRIAL=1 (it times the NPU, so it's run by hand).</summary>
+public class WarmUpTrialTests
+{
+    [Fact]
+    public async Task WarmingUp_MakesTheFirstPictureFast()
+    {
+        if (Environment.GetEnvironmentVariable("QD_SCREEN_TRIAL") != "1") Assert.Skip("Set QD_SCREEN_TRIAL=1 to run.");
+        var cancel = TestContext.Current.CancellationToken;
+        using var ai = new WindowsAI();
+        var warm = await ai.WarmUpAsync(cancel);
+        // A picture from a file: drawn text comes out blank when Windows' session has no display (a disconnected remote session).
+        var picture = Pictures.FromFile(Environment.GetEnvironmentVariable("QD_TRIAL_PICTURE") ?? throw new InvalidOperationException("Set QD_TRIAL_PICTURE.")).Image;
+        var started = DateTime.UtcNow;
+        var result = await Describing.RunAsync(picture, "accessible", ai, cancel);
+        TestContext.Current.TestOutputHelper!.WriteLine(
+            $"warm-up {warm.TotalSeconds:0.0} s; first picture after it {(DateTime.UtcNow - started).TotalSeconds:0.0} s " +
+            $"(description {(result.Description is null ? result.DescriptionCode : "ok")}, {result.Lines?.Count} lines)");
+    }
+}
