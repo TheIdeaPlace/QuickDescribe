@@ -1,4 +1,4 @@
-﻿using System.Media;
+using System.Media;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -29,7 +29,8 @@ public partial class MainWindow : Window
     /// <summary>What's being described, for saying it stopped.</summary>
     private string? _describing;
 
-    /// <summary>A dialog (Open Picture) is open: hotkeys wait until it's closed.</summary>
+    /// <summary>A dialog is open, or about to be (Report a Bug while it's prepared): hotkeys wait until it's closed. Any
+    /// modal dialog also disables this window, which <see cref="OnHotKey"/> checks too.</summary>
     private bool _dialogOpen;
 
     /// <summary>A result that arrived while Quick Describe wasn't in front: spoken when it next is.</summary>
@@ -122,9 +123,10 @@ public partial class MainWindow : Window
 
     private void OnHotKey(Target target)
     {
-        if (_dialogOpen)
+        if (_dialogOpen || !Native.IsWindowEnabled(_handle))
         {
-            // The dialog has focus, and describing would bring this window up behind it.
+            // A dialog has focus (Open Picture, Report a Bug, a question or a message), and describing would bring this
+            // window up behind it.
             SystemSounds.Beep.Play();
             return;
         }
@@ -206,7 +208,7 @@ public partial class MainWindow : Window
         _describing = picture.Source;
         _unspoken = null;
         Title = $"Describing {picture.Source} - {AppInfo.Name}";
-        ResultBox.Text = $"Describing {picture.Source}â€¦";
+        ResultBox.Text = $"Describing {picture.Source}…";
         Announcer.Announce($"Describing {picture.Source}");
         Result result;
         try
@@ -353,7 +355,7 @@ public partial class MainWindow : Window
     {
         try
         {
-            ShowMessage("Checking Windows AIâ€¦", null);
+            ShowMessage("Checking Windows AI…", null);
             var details = await WindowsAI.DetailsAsync(_closing.Token);
             var lines = new List<string>();
             if (details.Usable)

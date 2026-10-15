@@ -1,23 +1,21 @@
+using System.Runtime.CompilerServices;
 using QuickDescribe.Services;
 
 namespace QuickDescribe.Tests;
 
-/// <summary>Tests that use the data folder (the log, the crash flag) run one at a time, in a folder of their own, never
-/// in the real one.</summary>
+/// <summary>Tests that read the data folder's files (the log, the crash flag) run one at a time.</summary>
 [CollectionDefinition(Name)]
-public sealed class SharedState : ICollectionFixture<SharedState.DataFolder>
+public sealed class SharedState
 {
     public const string Name = "Shared state";
+}
 
-    public sealed class DataFolder : IDisposable
-    {
-        public string Path { get; } = Directory.CreateTempSubdirectory("QuickDescribeData").FullName;
+/// <summary>The whole test run uses a data folder of its own, set before any test runs, so nothing a test logs reaches the
+/// real one in %LOCALAPPDATA%.</summary>
+internal static class TestDataFolder
+{
+    public static readonly string Path = Directory.CreateTempSubdirectory("QuickDescribeData").FullName;
 
-        public DataFolder() => AppPaths.DataFolder = Path;
-
-        public void Dispose()
-        {
-            try { Directory.Delete(Path, recursive: true); } catch (IOException) { }
-        }
-    }
+    [ModuleInitializer]
+    internal static void Use() => AppPaths.DataFolder = Path;
 }

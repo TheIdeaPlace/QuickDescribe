@@ -64,7 +64,7 @@ Pictures are described and read on your PC by Windows itself, and never sent any
 
 What goes over the internet:
 
-- **Update checks.** Once a day, and when you choose Check for Updates, Quick Describe and Windows read the release information from GitHub, where Quick Describe is published. Nothing about you or your pictures is sent.
+- **Update checks.** When Quick Describe starts and while it runs, at most once a day, and when you choose Check for Updates, Quick Describe and Windows read the release information from GitHub, where Quick Describe is published. Nothing about you or your pictures is sent.
 - **Bug reports,** only when you press Send in Report a Bug. They go through The Idea Place's bug-report relay to GitHub, where they're public.
 - **Windows' AI model.** The first time, Windows may download it.
 

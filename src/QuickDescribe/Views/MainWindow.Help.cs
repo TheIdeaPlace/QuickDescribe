@@ -41,13 +41,20 @@ public partial class MainWindow
             if (SayIfJustUpdated()) ResultBox.Focus();
             else Dispatcher.BeginInvoke(OfferCrashReport, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
             _ = LookForUpdatesQuietlyAsync();
+            // Quick Describe is meant to run for days, and Windows installs updates only while it isn't running: so the
+            // quiet look runs again while it's open (still at most once a day).
+            _updateTimer.Tick += (_, _) => _ = LookForUpdatesQuietlyAsync(TimeSpan.Zero);
+            _updateTimer.Start();
         }, System.Windows.Threading.DispatcherPriority.Input);
     }
+
+    private readonly System.Windows.Threading.DispatcherTimer _updateTimer = new() { Interval = TimeSpan.FromHours(6) };
 
     private void OfferCrashReport()
     {
         if (App.UncleanLaunch is null) return;
         App.UncleanLaunch = null;
+        // The question disables this window, so hotkeys wait for it.
         if (!QuestionDialog.AskSafely(this, AppInfo.Name, $"{AppInfo.Name} quit unexpectedly last time. Report it?",
                 "The report opens in a form, where you can read and change it before it's sent. Reports are public.", "_Report…", "Not Now"))
             return;
@@ -80,7 +87,10 @@ public partial class MainWindow
         // An offered version that isn't newer (a feed that went back) isn't an update to show.
         var available = state == Updates.State.Available && (version is null || Updates.IsNewer(version, running));
         if (available && version is null) version = _settings.AvailableUpdate;
+        // Said once, when an update is first found, so someone who keeps Quick Describe running hears about it.
+        var news = available && !_update.Available && IsActive;
         _update = (available, available ? version : null);
+        if (news) Announcer.Announce($"An update to {AppInfo.Name} is available, in the Help menu.");
         _settings.LastUpdateCheck = DateTime.UtcNow;
         _settings.AvailableUpdate = available ? version : null;
         _settings.Save();
@@ -176,7 +186,8 @@ public partial class MainWindow
                 "Check for Updates", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.Yes) != MessageBoxResult.Yes)
             return;
         _requests.Cancel();
-        Announcer.Announce($"Downloading the update. {AppInfo.Name} will close and open again when it's ready.");
+        ResultBox.Text = $"Downloading the update. {AppInfo.Name} will close and open again when it's ready.";
+        Announcer.Announce(ResultBox.Text);
         if (await Updates.InstallAsync(source) is { } error)
         {
             Log.Write("update", $"The update couldn't be installed: {error}");

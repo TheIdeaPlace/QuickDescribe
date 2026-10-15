@@ -57,6 +57,15 @@ public partial class App : Application
             args.Handled = true;
         };
 
+        // Windows signing out or restarting: WPF only queues Shutdown for this, and Windows may end the process before
+        // OnExit runs, which would leave the flag and offer a crash report at the next start. Quick Describe is meant to be
+        // running all the time, so that would be almost every restart.
+        SessionEnding += (_, _) =>
+        {
+            Log.Write("exit", "Windows is signing out or shutting down");
+            CrashCheck.End();
+        };
+
         var window = new Views.MainWindow();
         MainWindow = window;
         window.Show();

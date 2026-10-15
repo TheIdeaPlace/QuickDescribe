@@ -1,4 +1,4 @@
-﻿using QuickDescribe.Services;
+using QuickDescribe.Services;
 
 namespace QuickDescribe.Tests;
 
