@@ -15,7 +15,7 @@ public static class Server
     /// </summary>
     public static async Task RunAsync(TextReader input, TextWriter output,
         Func<Protocol.DescribeRequest, Task<string>> describe, Action? onUnexpectedFailure = null,
-        Func<Protocol.DescribeRequest, Task<IReadOnlyList<string>>>? read = null)
+        Func<Protocol.DescribeRequest, Task<IReadOnlyList<string>>>? read = null, Action? onUnexpectedReadFailure = null)
     {
         var reader = new LineReader(input, Protocol.MaxLineChars);
         while (true)
@@ -36,10 +36,12 @@ public static class Server
             {
                 var started = DateTime.UtcNow;
                 var id = 0;
+                var reading = false;
                 try
                 {
                     var request = Protocol.ParseRequest(line);
                     id = request.Id;
+                    reading = request.Op == Protocol.Read;
                     if (request.Op == Protocol.Read)
                     {
                         if (read is null) throw new ProtocolException(id, Codes.BadRequest, "This helper doesn't read text.");
@@ -58,7 +60,9 @@ public static class Server
                 }
                 catch (Exception ex)
                 {
-                    onUnexpectedFailure?.Invoke();
+                    // A read that failed resets only what reads (when given), so the description model warmed up a moment
+                    // ago isn't thrown away with it.
+                    (reading && onUnexpectedReadFailure is not null ? onUnexpectedReadFailure : onUnexpectedFailure)?.Invoke();
                     response = Protocol.Failure(id, Codes.InternalError, $"{ex.GetType().Name} 0x{ex.HResult:X8}: {ex.Message.Trim()}");
                 }
             }

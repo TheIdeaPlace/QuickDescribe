@@ -130,6 +130,13 @@ public sealed class Describer : IDisposable
 
     /// <summary>Drops the model after an unexpected failure, so the next request starts it
     /// afresh rather than reusing one that may be broken (the NPU reset, say).</summary>
+    /// <summary>Drops the text recognizer only, after a read failed unexpectedly: the description model stays loaded.</summary>
+    public void ResetRecognizer()
+    {
+        try { _recognizer?.Dispose(); } catch { /* it may already be gone */ }
+        _recognizer = null;
+    }
+
     public void Reset()
     {
         try { _generator?.Dispose(); } catch { /* it may already be gone */ }

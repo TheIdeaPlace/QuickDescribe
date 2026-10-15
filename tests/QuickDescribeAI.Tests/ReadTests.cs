@@ -83,6 +83,29 @@ public class ReadTests
     }
 
     [Fact]
+    public async Task AnUnexpectedReadFailure_ResetsOnlyTheReader_SoTheDescriptionModelStaysWarm()
+    {
+        var output = new StringWriter();
+        var (resets, readResets) = (0, 0);
+        await Server.RunAsync(new StringReader($"{Req(1, "read")}\n{Req(2, null)}\n"), output, r => Task.FromResult("described"),
+            () => resets++, r => throw new ArgumentNullException("source"), () => readResets++);
+        var answers = output.ToString().Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(l => JsonNode.Parse(l)!.AsObject()).ToList();
+        Assert.Equal(Codes.InternalError, (string)answers[0]["code"]!);
+        Assert.Equal((0, 1), (resets, readResets));
+        Assert.Equal("described", (string)answers[1]["text"]!);
+    }
+
+    [Fact]
+    public async Task WithoutAReadReset_AReadFailureResetsEverything_AsBefore()
+    {
+        var output = new StringWriter();
+        var resets = 0;
+        await Server.RunAsync(new StringReader($"{Req(1, "read")}\n"), output, r => Task.FromResult("x"), () => resets++,
+            r => throw new InvalidOperationException("boom"));
+        Assert.Equal(1, resets);
+    }
+
+    [Fact]
     public async Task AReadersFailure_IsAnsweredWithItsCode()
     {
         var output = new StringWriter();

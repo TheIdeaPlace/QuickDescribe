@@ -65,7 +65,7 @@ try
         {
             using var describer = new Describer();
             await Server.RunAsync(Console.In, Console.Out, describer.DescribeAsync, describer.Reset,
-                r => describer.ReadTextAsync(r.Id, r.Mime, r.Image));
+                r => describer.ReadTextAsync(r.Id, r.Mime, r.Image), describer.ResetRecognizer);
             return 0;
         }
 

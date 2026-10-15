@@ -148,6 +148,36 @@ public class HelperConnectionTests
     }
 
     [Fact]
+    public async Task AWarmUpThatFails_IsTriedOnce_NotAtEverySize()
+    {
+        var helpers = new FakeHelpers { Setup = h => h.Answer = r => FakeHelper.Fail(r, "internal_error") };
+        using var ai = helpers.Client();
+        Assert.Equal("internal_error", (await Assert.ThrowsAsync<DescriptionException>(() => ai.WarmUpAsync(Token))).Code);
+        Assert.Single(helpers.Started[0].Requests);
+    }
+
+    [Fact]
+    public async Task AWarmUpThatHangs_GivesUpAtItsOwnLimit_AndFreesTheHelper()
+    {
+        var was = WindowsAI.WarmUpTimeout;
+        WindowsAI.WarmUpTimeout = TimeSpan.FromMilliseconds(200);
+        try
+        {
+            var helpers = new FakeHelpers { Setup = h => h.Hold = new TaskCompletionSource() };
+            using var ai = helpers.Client(TimeSpan.FromMinutes(3));
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => ai.WarmUpAsync(Token));
+            Assert.True(helpers.Started[0].Killed);
+            // The next request gets a fresh helper at once.
+            helpers.Setup = null;
+            Assert.Equal(["Line one", "Line two"], await ai.ReadTextAsync([1], Token));
+        }
+        finally
+        {
+            WindowsAI.WarmUpTimeout = was;
+        }
+    }
+
+    [Fact]
     public async Task WarmingUp_WhenWindowsAIIsntThere_SaysSo()
     {
         var helpers = new FakeHelpers { StartFailure = new DescriptionException("not_installed", "No helper.") };

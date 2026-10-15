@@ -19,6 +19,10 @@ dotnet test --solution QuickDescribe.sln
 .\scripts\build-ai-helper.ps1 -Register   # Developer Mode; Windows AI in development builds
 ```
 
+After changing the helper (`src/QuickDescribeAI`), run `.\scripts\build-ai-helper.ps1 -Register` again: development builds and the live tests use the registered helper, not the one just built. An installed Quick Describe claims the same `quickdescribe-ai` command, so remove it (`Get-AppxPackage TheIdeaPlace.QuickDescribe | Remove-AppxPackage`) while working on the helper.
+
+Drawn text comes out blank when Windows' session has no display (Kelly's remote session disconnected), so the tests that draw text fail on this PC then; CI runs them.
+
 `QD_SCREEN_TRIAL=1` runs `ScreenTrialTests`, which captures this PC's real screen, window and focused item and prints only outcomes and timings.
 
 Windows AI needs the Copilot+ NPU, which the vmtest VMs don't have, so this app is tested on Kelly's PC (Kelly, 15 Oct 2026). Keep such runs short and close what you open.
