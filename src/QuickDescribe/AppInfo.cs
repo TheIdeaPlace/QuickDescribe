@@ -19,4 +19,14 @@ internal static class AppInfo
     public const string InstallerFile = "QuickDescribe.appinstaller";
 
     public const string Repository = "TheIdeaPlace/QuickDescribe";
+
+    /// <summary>Where Report a Bug's browser page files issues, when the relay can't.</summary>
+    public const string IssuesUrl = $"https://github.com/{Repository}/issues/new";
+
+    /// <summary>All the releases, and one version's notes, for See what's new.</summary>
+    public const string ReleasesUrl = $"https://github.com/{Repository}/releases";
+    public static string ReleaseNotesUrl(string version) => $"https://github.com/{Repository}/releases/tag/v{version}";
+
+    /// <summary>The README, which is the user guide.</summary>
+    public const string GuideUrl = $"https://github.com/{Repository}#readme";
 }

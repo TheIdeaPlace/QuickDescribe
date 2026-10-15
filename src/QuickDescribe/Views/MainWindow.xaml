@@ -28,7 +28,14 @@
             </MenuItem>
             <MenuItem Header="_Help">
                 <MenuItem Header="_Keyboard Shortcuts" InputGestureText="F1" Click="OnShortcuts" />
+                <MenuItem Header="User _Guide" Click="OnGuide" />
                 <MenuItem Header="Check _Windows AI" Click="OnCheckAI" />
+                <Separator />
+                <!-- Says what's running, or what's available once an update is found (Updates.MenuTitle). -->
+                <MenuItem x:Name="UpdatesItem" Header="Check for _Updates…" Click="OnCheckForUpdates" />
+                <MenuItem Header="Report a _Bug…" Click="OnReportBug" />
+                <MenuItem Header="Open _Log Folder" Click="OnOpenLogFolder" />
+                <Separator />
                 <MenuItem Header="_About Quick Describe" Click="OnAbout" />
             </MenuItem>
         </Menu>

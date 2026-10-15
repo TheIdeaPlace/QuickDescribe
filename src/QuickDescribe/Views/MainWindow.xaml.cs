@@ -80,7 +80,12 @@ public partial class MainWindow : Window
     {
         ResultBox.Focus();
         // Said as well as shown: a screen reader reads only the box's first line when it gets focus.
-        if (_hotKeys is { Unavailable.Count: > 0 }) Announcer.Announce(HotKeyConflict());
+        if (_hotKeys is { Unavailable.Count: > 0 })
+        {
+            Log.Write("start", $"Hotkeys another app has: {string.Join(", ", _hotKeys.Unavailable.Select(HotKeys.GestureFor))}");
+            Announcer.Announce(HotKeyConflict());
+        }
+        AfterStart();
     }
 
     private string HotKeyConflict() =>
@@ -173,6 +178,7 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             // Anything at all: said, rather than lost with Quick Describe still minimized.
+            Log.Error("capture", $"Taking the picture ({target}) failed", ex);
             (picture, problem) = (null, $"The picture couldn't be taken: {ex.Message.Trim()}");
         }
         finally
