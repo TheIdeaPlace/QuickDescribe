@@ -119,6 +119,42 @@ public class HelperConnectionTests
         Assert.Single(helpers.Started[0].Requests); // too much text isn't tried again smaller
     }
 
+    [Fact]
+    public async Task WarmingUp_DescribesAndReadsATinyPicture_ThroughTheSameHelper()
+    {
+        var helpers = new FakeHelpers();
+        using var ai = helpers.Client();
+        await ai.WarmUpAsync(Token);
+        var helper = Assert.Single(helpers.Started);
+        Assert.Equal(2, helper.Requests.Count);
+        Assert.Equal("brief", (string?)helper.Requests[0]["kind"]);
+        Assert.Equal("read", (string?)helper.Requests[1]["op"]);
+        // The helper stays, warm, for the first real picture.
+        Assert.False(helper.Killed);
+        Assert.Equal("A description.", await ai.DescribeAsync(Jpeg, "brief", Token));
+        Assert.Single(helpers.Started);
+    }
+
+    [Fact]
+    public async Task WarmingUp_DoesntMindTheModelsVerdictOnTheBlankPicture_OrAPCWithoutTheRecognizer()
+    {
+        var helpers = new FakeHelpers
+        {
+            Setup = h => h.Answer = r => (string?)r["op"] == "read" ? FakeHelper.Fail(r, "not_supported") : FakeHelper.Fail(r, "content_filtered"),
+        };
+        using var ai = helpers.Client();
+        await ai.WarmUpAsync(Token);
+        Assert.Equal(2, helpers.Started[0].Requests.Count);
+    }
+
+    [Fact]
+    public async Task WarmingUp_WhenWindowsAIIsntThere_SaysSo()
+    {
+        var helpers = new FakeHelpers { StartFailure = new DescriptionException("not_installed", "No helper.") };
+        using var ai = helpers.Client();
+        Assert.Equal("not_installed", (await Assert.ThrowsAsync<DescriptionException>(() => ai.WarmUpAsync(Token))).Code);
+    }
+
     [Theory]
     [InlineData("Ready", true)]
     [InlineData("NotSupportedOnCurrentSystem", true)]
