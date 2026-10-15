@@ -32,6 +32,10 @@ Windows AI needs the Copilot+ NPU, which the vmtest VMs don't have, so this app 
 - `Requests` owns describing's sequencing: a new request or Escape cancels the last; messages (F1, Help) never do, or a result on its way is lost.
 - `WindowsAI` takes an `IHelperConnection` factory, so the client's pairing, restarts, timeouts and cancellation are tested against `FakeHelper` (tests) without a real helper.
 
+## Test builds in OneDrive
+
+`.\scripts\build-msix.ps1 -Sign -Destination C:\Users\kelly\OneDrive\qdescribe` builds Kelly's test copy. Install with **Install Quick Describe.cmd** in that folder, not the .appinstaller: a `file:` .appinstaller names its packages by full path, and opening it failed ("can't open package") on Kelly's other PC (15 Oct 2026). The .cmd (`packaging/Install-FromFolder.ps1`) copies the package locally first and installs from there, from any path, which also makes OneDrive download online-only files. Copies installed that way don't update themselves; run it again for a newer build.
+
 ## Releasing
 
 `VERSION` is the one version. Raise it in a PR, merge, then push `v<version>` on main: `.github/workflows/release.yml` builds and signs the installer into a **draft** release, with `docs/release-notes/v<version>.md` as its notes. Publishing waits for Kelly's go. Never publish a release without `QuickDescribe.appinstaller`: the latest release is where every installed copy looks for updates.
