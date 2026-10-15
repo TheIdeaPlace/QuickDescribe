@@ -246,7 +246,18 @@ Copy-Item -LiteralPath $bundle -Destination $Destination -Force
 [IO.File]::WriteAllText((Join-Path $Destination $installerFile), $appInstaller, (New-Object Text.UTF8Encoding $false))
 Get-ChildItem -LiteralPath $Destination -Filter "$($installerBase)_*.msixbundle" | Where-Object { $_.Name -ne $bundleName } | Remove-Item -Force
 
-if ($Sign) {
+# A build for a folder (OneDrive, a share) also gets an installer that works from wherever the folder is, and when
+# OneDrive hasn't downloaded the files yet: see packaging\Install-FromFolder.ps1. A release on a website doesn't need it.
+$folderInstaller = 'Install Quick Describe.cmd'
+if ($BaseUri.StartsWith('file:')) {
+    Copy-Item -LiteralPath (Join-Path $packaging 'Install-FromFolder.ps1') -Destination $Destination -Force
+    $cmd = "@echo off`r`npowershell -NoProfile -ExecutionPolicy Bypass -File `"%~dp0Install-FromFolder.ps1`"`r`necho.`r`npause`r`n"
+    [IO.File]::WriteAllText((Join-Path $Destination $folderInstaller), $cmd, (New-Object Text.ASCIIEncoding))
+}
+
+if ($Sign -and $BaseUri.StartsWith('file:')) {
+    Write-Host "Quick Describe $($version): open `"$folderInstaller`" in $Destination to install, on any PC that syncs that folder."
+} elseif ($Sign) {
     Write-Host "Quick Describe $($version): open $(Join-Path $Destination $installerFile) to install."
 } else {
     Write-Host "Quick Describe $version, unsigned, in $Destination. Windows won't install it; build with -Sign for that."
