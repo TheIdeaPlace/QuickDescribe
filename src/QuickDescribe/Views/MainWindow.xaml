@@ -1,0 +1,44 @@
+<Window x:Class="QuickDescribe.Views.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Quick Describe" Width="760" Height="560" MinWidth="420" MinHeight="300"
+        WindowStartupLocation="CenterScreen" AllowDrop="True"
+        Drop="OnDrop" DragOver="OnDragOver" PreviewKeyDown="OnPreviewKeyDown">
+    <DockPanel>
+        <Menu DockPanel.Dock="Top">
+            <MenuItem Header="_File">
+                <MenuItem x:Name="OpenItem" Header="_Open Picture…" InputGestureText="Ctrl+O" Click="OnOpen" />
+                <MenuItem x:Name="ClipboardItem" Header="Describe _Clipboard" Click="OnClipboard" />
+                <Separator />
+                <MenuItem Header="E_xit" InputGestureText="Alt+F4" Click="OnExit" />
+            </MenuItem>
+            <MenuItem Header="_Describe">
+                <MenuItem x:Name="ScreenItem" Header="_Screen" Click="OnScreen" />
+                <MenuItem x:Name="WindowItem" Header="Active _Window" Click="OnWindow" />
+                <MenuItem x:Name="FocusItem" Header="_Focused Item" Click="OnFocus" />
+                <Separator />
+                <MenuItem x:Name="KindMenu" Header="Description _Type" />
+            </MenuItem>
+            <MenuItem Header="_Edit">
+                <MenuItem Header="_Copy Result" InputGestureText="Ctrl+Shift+C" Click="OnCopy" />
+            </MenuItem>
+            <MenuItem Header="_Help">
+                <MenuItem Header="_Keyboard Shortcuts" InputGestureText="F1" Click="OnShortcuts" />
+                <MenuItem Header="Check _Windows AI" Click="OnCheckAI" />
+                <MenuItem Header="_About Quick Describe" Click="OnAbout" />
+            </MenuItem>
+        </Menu>
+
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="8">
+            <Button x:Name="ClipboardButton" Content="Describe _Clipboard" Padding="10,4" Margin="0,0,8,0" Click="OnClipboard" />
+            <Button Content="_Open Picture…" Padding="10,4" Margin="0,0,8,0" Click="OnOpen" />
+            <Button Content="Co_py Result" Padding="10,4" Click="OnCopy" />
+        </StackPanel>
+
+        <Label DockPanel.Dock="Top" Target="{Binding ElementName=ResultBox}" Content="_Result:" Margin="4,4,4,0" />
+        <!-- Read-only, but with a caret, so the result can be read by line, word and character. -->
+        <TextBox x:Name="ResultBox" Margin="8,0,8,0" IsReadOnly="True" IsReadOnlyCaretVisible="True"
+                 TextWrapping="Wrap" AcceptsReturn="True" VerticalScrollBarVisibility="Auto"
+                 FontSize="15" AutomationProperties.Name="Result" />
+    </DockPanel>
+</Window>
