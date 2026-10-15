@@ -32,7 +32,6 @@ internal static partial class Native
     public const uint MOD_ALT = 0x1, MOD_CONTROL = 0x2, MOD_SHIFT = 0x4, MOD_WIN = 0x8, MOD_NOREPEAT = 0x4000;
     public const uint MONITOR_DEFAULTTONEAREST = 2;
     public const int DWMWA_EXTENDED_FRAME_BOUNDS = 9;
-    public const int DWMWA_CLOAKED = 14;
     public const int SM_XVIRTUALSCREEN = 76, SM_YVIRTUALSCREEN = 77, SM_CXVIRTUALSCREEN = 78, SM_CYVIRTUALSCREEN = 79;
     public const uint SRCCOPY = 0x00CC0020, CAPTUREBLT = 0x40000000;
 
@@ -123,6 +122,17 @@ internal static partial class Native
     [LibraryImport("gdi32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool DeleteDC(IntPtr hdc);
+
+    [LibraryImport("shcore.dll")]
+    private static partial int GetDpiForMonitor(IntPtr monitor, int dpiType, out uint dpiX, out uint dpiY);
+
+    /// <summary>How much the monitor at a point is scaled: 1 at 100% (96 DPI), 2 at 200%.</summary>
+    public static double ScaleAt(int x, int y)
+    {
+        var monitor = MonitorFromPoint(new POINT { X = x, Y = y }, MONITOR_DEFAULTTONEAREST);
+        // MDT_EFFECTIVE_DPI: the scaling the person chose in Settings.
+        return monitor != IntPtr.Zero && GetDpiForMonitor(monitor, 0, out var dpi, out _) == 0 && dpi > 0 ? dpi / 96.0 : 1.0;
+    }
 
     /// <summary>The whole monitor a window is on (or nearest to).</summary>
     public static PixelRect MonitorOf(IntPtr hWnd) => MonitorBounds(MonitorFromWindow(hWnd, MONITOR_DEFAULTTONEAREST));

@@ -262,6 +262,10 @@ public partial class MainWindow : Window
                 ? "Windows AI is ready to describe pictures."
                 : "Windows AI can describe pictures once its model is ready. Getting it ready now; the first time, this can take a few minutes.");
             if (details.HelperVersion is { } v) lines.Add($"{AppInfo.HelperName} {v}.");
+            if (details.Components.TryGetValue("textRecognition", out var recognizer))
+                lines.Add(recognizer == "Ready"
+                    ? "Windows AI's text recognizer is ready, and reads the text in pictures."
+                    : $"Windows AI's text recognizer: {recognizer}. Windows' built-in text recognition reads the text instead.");
             if (details.Components.TryGetValue("languageModel", out var language))
                 lines.Add($"Phi Silica, Windows' language model, which answering questions would need: {language}.");
         }
@@ -270,6 +274,7 @@ public partial class MainWindow : Window
             lines.Add(details.Message ?? $"Windows AI isn't available ({details.State}).");
         }
         lines.Add(TextLanguages());
+        lines.Add("Describing a picture with too much text: Windows' AI declines most screens of text. The text is read instead.");
         ShowMessage(string.Join(Environment.NewLine, lines), null);
         if (details.State == "NotReady") await GetModelReadyAsync();
     }

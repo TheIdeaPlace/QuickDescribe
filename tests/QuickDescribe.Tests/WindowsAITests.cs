@@ -53,6 +53,41 @@ public class WindowsAITests
     }
 
     [Fact]
+    public void AReadRequest_SaysRead_AndCarriesThePng()
+    {
+        var o = JsonNode.Parse(WindowsAI.BuildReadRequest(8, [0x89, 0x50]))!;
+        Assert.Equal((8, "read", "image/png"), ((int)o["id"]!, (string)o["op"]!, (string)o["mime"]!));
+        Assert.Null(o["kind"]);
+        Assert.Equal(new byte[] { 0x89, 0x50 }, Convert.FromBase64String((string)o["image"]!));
+    }
+
+    [Fact]
+    public void AReadsLines_AreTrimmed_AndBlankOnesDropped()
+    {
+        Assert.Equal(["File", "Edit"], WindowsAI.ParseLines("""{"id":8,"ok":true,"lines":[" File ","","Edit"],"seconds":0.3}""", 8));
+        Assert.Empty(WindowsAI.ParseLines("""{"id":8,"ok":true,"lines":[]}""", 8));
+    }
+
+    [Theory]
+    [InlineData("""{"id":8,"ok":true}""", "bad_response")]
+    [InlineData("""{"id":8,"ok":true,"lines":"File"}""", "bad_response")]
+    [InlineData("""{"id":8,"ok":true,"lines":[1,2]}""", "bad_response")]
+    [InlineData("""{"id":8,"ok":false,"code":"not_supported","message":"m"}""", "not_supported")]
+    public void AReadThatFailed_OrCantBeRead_SaysWhy(string line, string code)
+    {
+        Assert.Equal(code, Assert.Throws<DescriptionException>(() => WindowsAI.ParseLines(line, 8)).Code);
+    }
+
+    [Theory]
+    [InlineData("""{"id":8,"ok":true}""", true)]
+    [InlineData("""{"id":0,"ok":false}""", true)]
+    [InlineData("""{"id":7,"ok":true}""", false)]
+    [InlineData("""{"ok":true}""", false)]
+    [InlineData("Getting the model ready", false)]
+    public void OnlyAnAnswerToThisRequest_IsTakenAsIts(string line, bool answers) =>
+        Assert.Equal(answers, WindowsAI.IsAnswerTo(line, 8));
+
+    [Fact]
     public void Readiness_IsRead_WithItsComponents()
     {
         var r = WindowsAI.ParseReadiness("""{"protocol":1,"version":"0.1.0","identity":true,"state":"Ready","components":{"languageModel":"NotSupportedOnCurrentSystem"}}""");

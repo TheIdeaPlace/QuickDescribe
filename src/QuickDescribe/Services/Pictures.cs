@@ -165,6 +165,18 @@ public static class Pictures
         encoder.Save(stream);
         return stream.ToArray();
     }
+
+    /// <summary>The picture as a PNG at most <paramref name="maxSide"/> pixels on its longer side, for reading its text.</summary>
+    public static byte[] Png(BitmapSource image, uint maxSide)
+    {
+        var (pixels, width, height) = OpaquePixels(image, FitScale(image.PixelWidth, image.PixelHeight, maxSide));
+        var opaque = BitmapSource.Create(width, height, 96, 96, PixelFormats.Bgr32, null, pixels, width * 4);
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(opaque));
+        using var stream = new MemoryStream();
+        encoder.Save(stream);
+        return stream.ToArray();
+    }
 }
 
 /// <summary>A picture couldn't be had; the message says why, for the person.</summary>

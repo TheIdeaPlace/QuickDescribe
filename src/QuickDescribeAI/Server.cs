@@ -14,7 +14,8 @@ public static class Server
     /// whatever failed, and serving carries on.
     /// </summary>
     public static async Task RunAsync(TextReader input, TextWriter output,
-        Func<Protocol.DescribeRequest, Task<string>> describe, Action? onUnexpectedFailure = null)
+        Func<Protocol.DescribeRequest, Task<string>> describe, Action? onUnexpectedFailure = null,
+        Func<Protocol.DescribeRequest, Task<IReadOnlyList<string>>>? read = null)
     {
         var reader = new LineReader(input, Protocol.MaxLineChars);
         while (true)
@@ -39,8 +40,17 @@ public static class Server
                 {
                     var request = Protocol.ParseRequest(line);
                     id = request.Id;
-                    var text = await describe(request);
-                    response = Protocol.Success(id, request.Kind, text, (DateTime.UtcNow - started).TotalSeconds);
+                    if (request.Op == Protocol.Read)
+                    {
+                        if (read is null) throw new ProtocolException(id, Codes.BadRequest, "This helper doesn't read text.");
+                        var lines = await read(request);
+                        response = Protocol.ReadSuccess(id, lines, (DateTime.UtcNow - started).TotalSeconds);
+                    }
+                    else
+                    {
+                        var text = await describe(request);
+                        response = Protocol.Success(id, request.Kind, text, (DateTime.UtcNow - started).TotalSeconds);
+                    }
                 }
                 catch (ProtocolException ex)
                 {

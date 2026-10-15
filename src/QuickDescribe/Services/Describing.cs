@@ -6,13 +6,13 @@ namespace QuickDescribe.Services;
 public static class Describing
 {
     /// <summary>
-    /// Both at once: Windows' AI describes while OCR reads, so the slower of the two sets the wait. Neither failing stops
+    /// Both at once: Windows' AI describes while the text is read, so the slower of the two sets the wait. Neither failing stops
     /// the other: a screen the model declines for its text still gets its text read. Call on the UI thread.
     /// </summary>
     public static async Task<Result> RunAsync(BitmapSource image, string kind, WindowsAI ai, CancellationToken cancel = default)
     {
         var describe = DescribeAsync(image, kind, ai, cancel);
-        var read = ReadAsync(image);
+        var read = ReadAsync(image, ai, cancel);
         var (description, code, problem) = await describe;
         var (lines, textProblem) = await read;
         return new Result(description, code, problem, lines, textProblem);
@@ -35,11 +35,11 @@ public static class Describing
         }
     }
 
-    private static async Task<(IReadOnlyList<string>? Lines, string? Problem)> ReadAsync(BitmapSource image)
+    private static async Task<(IReadOnlyList<string>? Lines, string? Problem)> ReadAsync(BitmapSource image, WindowsAI ai, CancellationToken cancel)
     {
         try
         {
-            return (await TextRecognition.ReadLinesAsync(image), null);
+            return (await TextRecognition.ReadLinesAsync(image, ai, cancel), null);
         }
         catch (PictureException ex)
         {

@@ -24,7 +24,7 @@ public class TextRecognitionTests
     {
         NeedsOcr();
         var picture = Drawn.Text(700, 200, 28, "Quick Describe reads text", "Save Cancel Help");
-        var lines = await TextRecognition.ReadLinesAsync(picture);
+        var lines = await TextRecognition.ReadWithBuiltInOcrAsync(picture);
         Assert.Equal(["Quick Describe reads text", "Save Cancel Help"], lines);
     }
 
@@ -34,14 +34,34 @@ public class TextRecognitionTests
         NeedsOcr();
         // 12 pixels is Segoe UI at 9 points, the size of much of Windows' own text at 100% scaling.
         var picture = Drawn.Text(400, 80, 12, "Open the Settings menu");
-        var lines = await TextRecognition.ReadLinesAsync(picture);
+        var lines = await TextRecognition.ReadWithBuiltInOcrAsync(picture);
         Assert.Equal(["Open the Settings menu"], lines);
+    }
+
+    /// <summary>Windows AI's recognizer, where the helper is installed and the PC has it; skipped elsewhere.</summary>
+    [Fact]
+    public async Task WindowsAIsRecognizer_ReadsText()
+    {
+        var details = await WindowsAI.DetailsAsync(TestContext.Current.CancellationToken);
+        if (!details.Components.TryGetValue("textRecognition", out var state) || state != "Ready") Assert.Skip("Windows AI's text recognizer isn't ready here.");
+        using var ai = new WindowsAI();
+        var picture = Drawn.Text(700, 200, 28, "Quick Describe reads text", "42 Harbor Road");
+        var lines = await TextRecognition.ReadLinesAsync(picture, ai, TestContext.Current.CancellationToken);
+        Assert.Equal(["Quick Describe reads text", "42 Harbor Road"], lines);
+    }
+
+    [Fact]
+    public async Task WithoutTheHelper_TheBuiltInOcrReads()
+    {
+        NeedsOcr();
+        var lines = await TextRecognition.ReadLinesAsync(Drawn.Text(700, 120, 28, "Save Cancel Help"), ai: null, TestContext.Current.CancellationToken);
+        Assert.Equal(["Save Cancel Help"], lines);
     }
 
     [Fact]
     public async Task APictureWithoutText_HasNoLines()
     {
         NeedsOcr();
-        Assert.Empty(await TextRecognition.ReadLinesAsync(Drawn.Solid(300, 200, 0, 0, 200)));
+        Assert.Empty(await TextRecognition.ReadWithBuiltInOcrAsync(Drawn.Solid(300, 200, 0, 0, 200)));
     }
 }

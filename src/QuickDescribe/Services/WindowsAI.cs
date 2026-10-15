@@ -155,7 +155,19 @@ public sealed class WindowsAI : IDisposable
     /// <summary>Describes a picture. <paramref name="jpegAtSize"/> makes the JPEG to send at a given longest side, so an
     /// internal error can be tried again smaller.</summary>
     public Task<string> DescribeAsync(Func<uint, Task<byte[]>> jpegAtSize, string kind, CancellationToken cancel = default) =>
-        WithRetriesAsync(jpegAtSize, jpeg => DescribeOnceAsync(jpeg, kind, cancel));
+        WithRetriesAsync(jpegAtSize, async jpeg =>
+        {
+            var id = Interlocked.Increment(ref _nextId);
+            return ParseResponse(await SendAsync(BuildRequest(id, kind, jpeg), id, cancel), id);
+        });
+
+    /// <summary>The text in a picture, line by line, from Windows AI's text recognizer (Copilot+ PCs). Sent as PNG: JPEG's
+    /// blur around letters costs OCR more than it costs a description.</summary>
+    public async Task<IReadOnlyList<string>> ReadTextAsync(byte[] png, CancellationToken cancel = default)
+    {
+        var id = Interlocked.Increment(ref _nextId);
+        return ParseLines(await SendAsync(BuildReadRequest(id, png), id, cancel), id);
+    }
 
     /// <summary>Tries the first size, then smaller ones while the model reports an internal error. Any other failure
     /// (content filter, too much text) is final.</summary>
@@ -177,19 +189,19 @@ public sealed class WindowsAI : IDisposable
         throw last!;
     }
 
-    private async Task<string> DescribeOnceAsync(byte[] jpeg, string kind, CancellationToken cancel)
+    /// <summary>Sends one request line and gives back the helper's answer line, one request at a time.</summary>
+    private async Task<string> SendAsync(string request, int id, CancellationToken cancel)
     {
         await _gate.WaitAsync(cancel);
         try
         {
             var server = EnsureServer();
-            var id = Interlocked.Increment(ref _nextId);
             string? line;
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancel);
             timeout.CancelAfter(DescribeTimeout);
             try
             {
-                await server.StandardInput.WriteAsync(BuildRequest(id, kind, jpeg) + "\n");
+                await server.StandardInput.WriteAsync(request + "\n");
                 await server.StandardInput.FlushAsync(timeout.Token);
                 line = await server.StandardOutput.ReadLineAsync(timeout.Token);
             }
@@ -199,7 +211,7 @@ public sealed class WindowsAI : IDisposable
                 // A fresh helper keeps answers and requests in step.
                 StopServer();
                 if (ex is OperationCanceledException && !cancel.IsCancellationRequested)
-                    throw new DescriptionException("timeout", "Windows took too long to describe this picture. Try again.");
+                    throw new DescriptionException("timeout", "Windows took too long with this picture. Try again.");
                 if (ex is IOException)
                     throw new DescriptionException("internal_error", $"The {AppInfo.HelperName} stopped unexpectedly.");
                 throw;
@@ -209,15 +221,13 @@ public sealed class WindowsAI : IDisposable
                 StopServer();
                 throw new DescriptionException("internal_error", $"The {AppInfo.HelperName} stopped unexpectedly.");
             }
-            try
+            if (!IsAnswerTo(line, id))
             {
-                return ParseResponse(line, id);
-            }
-            catch (DescriptionException ex) when (ex.Code == "bad_response")
-            {
+                // Not an answer to this request: the helper and this are out of step, so start a fresh one next time.
                 StopServer();
-                throw;
+                throw new DescriptionException("bad_response", $"The {AppInfo.HelperName} gave an answer that couldn't be read.");
             }
+            return line;
         }
         finally
         {
@@ -228,8 +238,55 @@ public sealed class WindowsAI : IDisposable
     internal static string BuildRequest(int id, string kind, byte[] jpeg) =>
         new JsonObject { ["id"] = id, ["kind"] = kind, ["mime"] = "image/jpeg", ["image"] = Convert.ToBase64String(jpeg) }.ToJsonString();
 
+    /// <summary>Whether a line is a JSON answer to request <paramref name="id"/> (or to an unreadable request, id 0).</summary>
+    internal static bool IsAnswerTo(string line, int id)
+    {
+        try
+        {
+            return JsonNode.Parse(line) is JsonObject o && o["id"] is JsonValue v && v.TryGetValue<int>(out var answered) && (answered == id || answered == 0);
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return false;
+        }
+    }
+
+    internal static string BuildReadRequest(int id, byte[] png) =>
+        new JsonObject { ["id"] = id, ["op"] = "read", ["mime"] = "image/png", ["image"] = Convert.ToBase64String(png) }.ToJsonString();
+
+    /// <summary>The lines from a read's response line, or a <see cref="DescriptionException"/> with the helper's code.</summary>
+    internal static IReadOnlyList<string> ParseLines(string line, int expectedId)
+    {
+        var o = ParseAnswer(line, expectedId);
+        try
+        {
+            if (o["lines"] is not JsonArray lines)
+                throw new DescriptionException("bad_response", $"The {AppInfo.HelperName} gave an answer that couldn't be read.");
+            return lines.Select(l => l?.GetValue<string>().Trim() ?? "").Where(l => l.Length > 0).ToList();
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or FormatException)
+        {
+            throw new DescriptionException("bad_response", $"The {AppInfo.HelperName} gave an answer that couldn't be read.");
+        }
+    }
+
     /// <summary>The description from a response line, or a <see cref="DescriptionException"/> with the helper's code.</summary>
     internal static string ParseResponse(string line, int expectedId)
+    {
+        var o = ParseAnswer(line, expectedId);
+        try
+        {
+            return (o["text"]?.GetValue<string>() ?? "").Trim();
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or FormatException)
+        {
+            throw new DescriptionException("bad_response", $"The {AppInfo.HelperName} gave an answer that couldn't be read.");
+        }
+    }
+
+    /// <summary>A successful answer to request <paramref name="expectedId"/>, or a <see cref="DescriptionException"/>: the
+    /// helper's own code when it failed, bad_response when the answer can't be read or is another request's.</summary>
+    private static JsonObject ParseAnswer(string line, int expectedId)
     {
         JsonObject? o;
         try { o = JsonNode.Parse(line) as JsonObject; }
@@ -240,7 +297,7 @@ public sealed class WindowsAI : IDisposable
             if (o["id"]?.GetValue<int>() is { } id && id != expectedId && id != 0)
                 throw new DescriptionException("bad_response", $"The {AppInfo.HelperName} answered a different request.");
             if (o["ok"]?.GetValue<bool>() == true)
-                return (o["text"]?.GetValue<string>() ?? "").Trim();
+                return o;
             var code = o["code"]?.GetValue<string>() ?? "internal_error";
             var message = o["message"]?.GetValue<string>() ?? "Windows couldn't describe this picture.";
             throw new DescriptionException(code, message);

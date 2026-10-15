@@ -15,6 +15,9 @@ internal static class AppInfo
     /// after a release, or saved settings are lost.</summary>
     public const string DataFolderName = "Quick Describe";
 
+    /// <summary>The installer people open, and where every copy looks for updates (the latest release's).</summary>
+    public const string InstallerFile = "QuickDescribe.appinstaller";
+
     public const string Repository = "TheIdeaPlace/QuickDescribe";
     public const string ReadmeUrl = $"https://github.com/{Repository}#readme";
 }

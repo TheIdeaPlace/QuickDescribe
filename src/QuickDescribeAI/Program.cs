@@ -29,7 +29,7 @@ if (mode is "--version")
 }
 if (mode is "--help" or "-h" or "/?")
 {
-    Line("Usage: quickdescribe-ai --check | --details | --prepare | --serve | --describe <picture> [kind ...] | --version");
+    Line("Usage: quickdescribe-ai --check | --details | --prepare | --serve | --describe <picture> [kind ...] | --read <picture> | --version");
     Line($"Kinds: {string.Join(", ", Protocol.Kinds)}");
     return 0;
 }
@@ -62,12 +62,26 @@ try
         case "--serve":
         {
             using var describer = new Describer();
-            await Server.RunAsync(Console.In, Console.Out, describer.DescribeAsync, describer.Reset);
+            await Server.RunAsync(Console.In, Console.Out, describer.DescribeAsync, describer.Reset,
+                r => describer.ReadTextAsync(r.Id, r.Mime, r.Image));
             return 0;
         }
 
         case "--describe":
             return await DescribeForPeopleAsync(args.Skip(1).ToArray());
+
+        case "--read":
+        {
+            if (args.Length < 2 || !MimeFor(args[1], out var mime))
+            {
+                Console.Error.WriteLine("Usage: quickdescribe-ai --read <JPEG, PNG, BMP, GIF or TIFF picture>");
+                return 2;
+            }
+            using var describer = new Describer();
+            foreach (var line in await describer.ReadTextAsync(0, mime, await File.ReadAllBytesAsync(Path.GetFullPath(args[1]))))
+                Line(line);
+            return 0;
+        }
 
         default:
             Console.Error.WriteLine($"Unknown option {args[0]}. Try --help.");

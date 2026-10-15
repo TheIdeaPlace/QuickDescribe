@@ -57,30 +57,7 @@ public sealed class Describer : IDisposable
             _generator = await ImageDescriptionGenerator.CreateAsync();
         }
 
-        SoftwareBitmap bitmap;
-        try
-        {
-            using var stream = new InMemoryRandomAccessStream();
-            await stream.WriteAsync(request.Image.AsBuffer());
-            stream.Seek(0);
-            var decoder = await BitmapDecoder.CreateAsync(stream);
-            var (width, height) = Protocol.ScaledSize(decoder.PixelWidth, decoder.PixelHeight);
-            var transform = new BitmapTransform
-            {
-                ScaledWidth = width,
-                ScaledHeight = height,
-                InterpolationMode = BitmapInterpolationMode.Fant,
-            };
-            bitmap = await decoder.GetSoftwareBitmapAsync(BitmapPixelFormat.Bgra8, BitmapAlphaMode.Premultiplied,
-                transform, ExifOrientationMode.RespectExifOrientation, ColorManagementMode.DoNotColorManage);
-        }
-        catch (Exception ex)
-        {
-            // The decoder's own messages are often empty; say what failed.
-            throw new ProtocolException(request.Id, Codes.DecodeFailed,
-                $"The picture couldn't be read as {request.Mime}" + (string.IsNullOrWhiteSpace(ex.Message) ? "." : $": {ex.Message.Trim()}"));
-        }
-
+        var bitmap = await DecodeAsync(request.Id, request.Mime, request.Image);
         using (bitmap)
         using (var image = ImageBuffer.CreateForSoftwareBitmap(bitmap))
         {
@@ -98,12 +75,65 @@ public sealed class Describer : IDisposable
         }
     }
 
+    /// <summary>Decodes a picture for the model, at most <see cref="Protocol.MaxSide"/> on a side.</summary>
+    private static async Task<SoftwareBitmap> DecodeAsync(int id, string mime, byte[] image)
+    {
+        try
+        {
+            using var stream = new InMemoryRandomAccessStream();
+            await stream.WriteAsync(image.AsBuffer());
+            stream.Seek(0);
+            var decoder = await BitmapDecoder.CreateAsync(stream);
+            var (width, height) = Protocol.ScaledSize(decoder.PixelWidth, decoder.PixelHeight);
+            var transform = new BitmapTransform
+            {
+                ScaledWidth = width,
+                ScaledHeight = height,
+                InterpolationMode = BitmapInterpolationMode.Fant,
+            };
+            return await decoder.GetSoftwareBitmapAsync(BitmapPixelFormat.Bgra8, BitmapAlphaMode.Premultiplied,
+                transform, ExifOrientationMode.RespectExifOrientation, ColorManagementMode.DoNotColorManage);
+        }
+        catch (Exception ex)
+        {
+            // The decoder's own messages are often empty; say what failed.
+            throw new ProtocolException(id, Codes.DecodeFailed,
+                $"The picture couldn't be read as {mime}" + (string.IsNullOrWhiteSpace(ex.Message) ? "." : $": {ex.Message.Trim()}"));
+        }
+    }
+
+    private TextRecognizer? _recognizer;
+
+    /// <summary>Reads the text in a picture with Windows AI's text recognizer, line by line, top to bottom. Throws
+    /// <see cref="ProtocolException"/> when the recognizer can't be used.</summary>
+    public async Task<IReadOnlyList<string>> ReadTextAsync(int id, string mime, byte[] image)
+    {
+        if (_recognizer is null)
+        {
+            var state = TextRecognizer.GetReadyState();
+            if (Protocol.ForReadyState(state.ToString()) is { } unavailable) throw new ProtocolException(id, unavailable.Code, unavailable.Message);
+            if (state != AIFeatureReadyState.Ready)
+            {
+                var ready = await TextRecognizer.EnsureReadyAsync();
+                if (ready.Status != AIFeatureReadyResultState.Success)
+                    throw new ProtocolException(id, Codes.NotReady, "Windows couldn't get its text recognizer ready.");
+            }
+            _recognizer = await TextRecognizer.CreateAsync();
+        }
+        using var bitmap = await DecodeAsync(id, mime, image);
+        using var buffer = ImageBuffer.CreateForSoftwareBitmap(bitmap);
+        var result = await _recognizer.RecognizeTextFromImageAsync(buffer);
+        return result.Lines.Select(l => l.Text.Trim()).Where(t => t.Length > 0).ToList();
+    }
+
     /// <summary>Drops the model after an unexpected failure, so the next request starts it
     /// afresh rather than reusing one that may be broken (the NPU reset, say).</summary>
     public void Reset()
     {
         try { _generator?.Dispose(); } catch { /* it may already be gone */ }
         _generator = null;
+        try { _recognizer?.Dispose(); } catch { /* it may already be gone */ }
+        _recognizer = null;
     }
 
     public void Dispose() => Reset();

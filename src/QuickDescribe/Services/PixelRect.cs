@@ -15,12 +15,17 @@ public readonly record struct PixelRect(int Left, int Top, int Right, int Bottom
         return r.IsEmpty ? default : r;
     }
 
+    /// <summary>The margin and smallest area around a focused item, in pixels at 100% scaling: enough to take in its label
+    /// and what's beside it, without so much that the description is about something else.</summary>
+    public const int FocusMargin = 16, FocusMinWidth = 400, FocusMinHeight = 200;
+
     /// <summary>
     /// The area to capture around a focused item: the item with a margin, grown to at least the minimum size so the
     /// model sees enough to say what it is, kept inside <paramref name="bounds"/> (its monitor) by sliding rather than
     /// cutting where it can. Null when the item isn't on that monitor at all.
     /// </summary>
-    public static PixelRect? AroundFocus(PixelRect item, PixelRect bounds, int margin = 12, int minWidth = 320, int minHeight = 180)
+    public static PixelRect? AroundFocus(PixelRect item, PixelRect bounds, int margin = FocusMargin, int minWidth = FocusMinWidth,
+        int minHeight = FocusMinHeight)
     {
         var visible = item.Intersect(bounds);
         if (visible.IsEmpty) return null;

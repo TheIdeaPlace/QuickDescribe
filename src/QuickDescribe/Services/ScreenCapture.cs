@@ -69,8 +69,11 @@ public static class ScreenCapture
         {
             var item = new PixelRect((int)Math.Floor(bounds.Left), (int)Math.Floor(bounds.Top),
                 (int)Math.Ceiling(bounds.Right), (int)Math.Ceiling(bounds.Bottom));
-            var monitor = Native.MonitorAt(item.Left + item.Width / 2, item.Top + item.Height / 2);
-            return (PixelRect.AroundFocus(item, monitor), name);
+            var (x, y) = (item.Left + item.Width / 2, item.Top + item.Height / 2);
+            // The area around the item is measured in pixels at 100%, so it takes in as much of the screen at any scaling.
+            var scale = Native.ScaleAt(x, y);
+            return (PixelRect.AroundFocus(item, Native.MonitorAt(x, y), (int)(PixelRect.FocusMargin * scale),
+                (int)(PixelRect.FocusMinWidth * scale), (int)(PixelRect.FocusMinHeight * scale)), name);
         }
         return (null, name);
     }

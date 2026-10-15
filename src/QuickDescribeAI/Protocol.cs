@@ -4,8 +4,10 @@
 // Serve mode reads one JSON request per line on stdin and writes one JSON response per line on
 // stdout, in order. Requests:
 //   {"id": 7, "kind": "accessible", "mime": "image/jpeg", "image": "<base64>"}
+//   {"id": 8, "op": "read", "mime": "image/png", "image": "<base64>"}     (the text in it, line by line)
 // Responses:
 //   {"id": 7, "ok": true,  "kind": "accessible", "text": "...", "seconds": 2.41}
+//   {"id": 8, "ok": true,  "lines": ["File", "Edit"], "seconds": 0.4}
 //   {"id": 7, "ok": false, "code": "content_filtered", "message": "..."}
 // The codes are the contract; Quick Describe (Services/WindowsAI.cs) decides what each one means
 // for the person. Bump Version if a field's meaning changes.
@@ -45,7 +47,15 @@ public static class Protocol
     /// valid JSON either way, and people read --check's.</summary>
     private static readonly JsonSerializerOptions Readable = new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
-    public sealed record DescribeRequest(int Id, string Kind, string Mime, byte[] Image);
+    /// <summary>What a request can ask for: a description (the default), or the text in the picture.</summary>
+    public const string Describe = "describe";
+    public const string Read = "read";
+
+    public sealed record DescribeRequest(int Id, string Kind, string Mime, byte[] Image)
+    {
+        /// <summary><see cref="Describe"/> or <see cref="Read"/>.</summary>
+        public string Op { get; init; } = Describe;
+    }
 
     /// <summary>Reads one request line. Throws <see cref="ProtocolException"/> with the code to
     /// answer with, and the request's id when it could be read.</summary>
@@ -81,6 +91,9 @@ public static class Protocol
             return node.GetValue<string>();
         }
 
+        var op = (StringField("op") ?? Describe).Trim().ToLowerInvariant();
+        if (op is not (Describe or Read))
+            throw new ProtocolException(id, Codes.BadRequest, $"There's no operation '{op}'. The operations are {Describe} and {Read}.");
         var kind = StringField("kind");
         var mime = StringField("mime");
         var image = StringField("image") ?? throw new ProtocolException(id, Codes.BadRequest, "The request has no picture.");
@@ -95,7 +108,7 @@ public static class Protocol
         {
             throw new ProtocolException(id, Codes.BadRequest, "The picture isn't valid base64.");
         }
-        return Validate(id, kind, mime, bytes);
+        return Validate(id, op == Read ? null : kind, mime, bytes) with { Op = op };
     }
 
     /// <summary>Checks a request's parts, wherever they came from, and normalises the kind and type.</summary>
@@ -132,6 +145,13 @@ public static class Protocol
     /// <summary>The answer line for a description.</summary>
     public static string Success(int id, string kind, string text, double seconds) =>
         new JsonObject { ["id"] = id, ["ok"] = true, ["kind"] = kind, ["text"] = text, ["seconds"] = Math.Round(seconds, 2) }.ToJsonString(Readable);
+
+    /// <summary>The answer line for text read from a picture.</summary>
+    public static string ReadSuccess(int id, IReadOnlyList<string> lines, double seconds) =>
+        new JsonObject
+        {
+            ["id"] = id, ["ok"] = true, ["lines"] = new JsonArray(lines.Select(l => (JsonNode)l).ToArray()), ["seconds"] = Math.Round(seconds, 2),
+        }.ToJsonString(Readable);
 
     public static string Failure(int id, string code, string message) =>
         new JsonObject { ["id"] = id, ["ok"] = false, ["code"] = code, ["message"] = message }.ToJsonString(Readable);
