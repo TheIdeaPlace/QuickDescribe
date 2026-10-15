@@ -235,6 +235,7 @@ public sealed class WindowsAI : IDisposable
                 // Given up or failed: the helper may still answer this request later, and that answer would then be read as
                 // the next one's. A fresh helper keeps answers and requests in step.
                 StopServer();
+                if (!cancel.IsCancellationRequested) Log.Error("helper", "A request to the helper failed; it was stopped", ex);
                 if (ex is OperationCanceledException && !cancel.IsCancellationRequested)
                     throw new DescriptionException("timeout", "Windows took too long with this picture. Try again.");
                 if (ex is IOException)
@@ -243,12 +244,14 @@ public sealed class WindowsAI : IDisposable
             }
             if (line is null)
             {
+                Log.Write("helper", "The helper stopped without answering");
                 StopServer();
                 throw new DescriptionException("internal_error", $"The {AppInfo.HelperName} stopped unexpectedly.");
             }
             if (!IsAnswerTo(line, id))
             {
                 // Not an answer to this request: the helper and this are out of step, so start a fresh one next time.
+                Log.Write("helper", "The helper's answer didn't match the request; it was stopped");
                 StopServer();
                 throw new DescriptionException("bad_response", $"The {AppInfo.HelperName} gave an answer that couldn't be read.");
             }

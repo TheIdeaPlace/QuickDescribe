@@ -42,6 +42,10 @@ Windows AI needs the Copilot+ NPU, which the vmtest VMs don't have, so this app 
 
 Signing needs, once per repo: the repo in `website/The-Idea-Place-Projects/signing/repos.json` with the `azure` group, `scripts/fix-federated-credentials.ps1` run, and `sync-secrets.py --apply` (see that folder's `windows.md`).
 
+## Updates and bug reports
+
+Copied from My Photo Library Described, The Idea Place apps' shared experience: `Services/Updates.cs` (Help > Check for Updates, the quiet daily check, "Update Installed" after an update; `MainWindow.Help.cs` wires them in), `Services/BugReport.cs` with `Views/BugReportWindow` (Help > Report a Bug… through the app kit's relay, app id `quickdescribe`; `CrashCheck` offers a report after a run that didn't quit cleanly), and `Services/Log.cs` (Help > Open Log Folder). The relay key reaches the package from the `APPKIT_RELAY_KEY` secret (release.yml) or `~/.signing-kit/appkit-relay-quickdescribe.key`; builds without it fall back to the GitHub page. Adding the app to the relay is in TheIdeaPlace/app-kit's `relay/README.md`.
+
 ## Accessibility
 
 Every change is judged with JAWS, NVDA and Narrator. Results are announced with UIA notifications from the active window, the Result box is a read-only text box with a caret, and focus always lands in it. When a change needs a screen-reader check, list the exact steps in the PR.

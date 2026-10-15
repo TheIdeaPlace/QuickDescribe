@@ -56,10 +56,12 @@ public static class TextRecognition
             }
             catch (DescriptionException ex) when (Unavailable.Contains(ex.Code))
             {
+                Log.Write("text", $"Windows AI's text recognizer isn't available ({ex.Code}); using the built-in OCR for now");
                 _aiUnavailableAt = DateTime.UtcNow;
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
+                Log.Write("text", $"Windows AI's text recognizer failed on this picture ({ex.GetType().Name}: {ex.Message}); using the built-in OCR");
                 // This picture only (too much for the helper, say): the built-in OCR tries it.
             }
         }

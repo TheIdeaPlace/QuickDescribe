@@ -133,6 +133,16 @@ function Invoke-Tool([string]$tool, [string[]]$arguments, [string]$what) {
 $makeappx = Find-Tool 'makeappx.exe'
 $makepri = Find-Tool 'makepri.exe'
 
+# Report a Bug's relay key, so reports are filed without a GitHub account: the repository's secret in the release
+# workflow (APPKIT_RELAY_KEY, set by the app kit's add-app.py), or a copy in the signing kit on Kelly's PC. Without one,
+# Report a Bug offers the GitHub page instead, which a release mustn't ship with.
+$kitKey = Join-Path $env:USERPROFILE '.signing-kit\appkit-relay-quickdescribe.key'
+$relayKey = if ($env:APPKIT_RELAY_KEY) { $env:APPKIT_RELAY_KEY.Trim() } elseif (Test-Path -LiteralPath $kitKey) { (Get-Content -LiteralPath $kitKey -Raw).Trim() } else { '' }
+if (-not $relayKey) {
+    if ($Sign -and $env:GITHUB_ACTIONS) { throw "No relay key: set the APPKIT_RELAY_KEY secret, or a release can't file bug reports." }
+    Write-Warning "No relay key (APPKIT_RELAY_KEY or the signing kit): Report a Bug will offer the GitHub page instead of filing reports itself."
+}
+
 # The runtime the helper is built against, and that the manifest depends on: the version QuickDescribeAI.csproj
 # references, not just the newest in a cache other projects share.
 $runtimeName = 'Microsoft.WindowsAppRuntime.1.8'
@@ -187,6 +197,8 @@ foreach ($a in $arches) {
     dotnet publish (Join-Path $windows 'src\QuickDescribe\QuickDescribe.csproj') -c Release -r "win-$a" --self-contained true `
         -o (Join-Path $layout 'App') --nologo "-p:Version=$text" "-p:FileVersion=$version"
     if ($LASTEXITCODE -ne 0) { throw "Publishing Quick Describe for $a failed." }
+    # The relay key beside the app (see above), read by BugReportRelay.
+    if ($relayKey) { [IO.File]::WriteAllText((Join-Path $layout 'App\appkit-relay.key'), $relayKey, (New-Object Text.UTF8Encoding $false)) }
     dotnet publish (Join-Path $windows 'src\QuickDescribeAI\QuickDescribeAI.csproj') -c Release -r "win-$a" `
         -o (Join-Path $layout 'AI') --nologo "-p:Version=$text" "-p:FileVersion=$version"
     if ($LASTEXITCODE -ne 0) { throw "Publishing the Windows AI helper for $a failed." }

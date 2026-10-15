@@ -11,7 +11,7 @@ Everything happens on your PC, with the AI built into Windows on Copilot+ PCs. N
 
 ## Installing
 
-Download and open [QuickDescribe.appinstaller](https://github.com/TheIdeaPlace/QuickDescribe/releases/latest/download/QuickDescribe.appinstaller) from the [latest release](https://github.com/TheIdeaPlace/QuickDescribe/releases/latest). Windows' App Installer shows Quick Describe and its publisher, Kelly Ford, with an Install button. It installs the Windows App Runtime first if your PC needs it. Quick Describe is then in the Start menu, and uninstalls from Settings, Apps like any app. Windows checks for updates every few hours and installs them while Quick Describe isn't running.
+Download and open [QuickDescribe.appinstaller](https://github.com/TheIdeaPlace/QuickDescribe/releases/latest/download/QuickDescribe.appinstaller) from the [latest release](https://github.com/TheIdeaPlace/QuickDescribe/releases/latest). Windows' App Installer shows Quick Describe and its publisher, Kelly Ford, with an Install button. It installs the Windows App Runtime first if your PC needs it. Quick Describe is then in the Start menu, and uninstalls from Settings, Apps like any app. Windows checks for updates every few hours and installs them while Quick Describe isn't running. **Help, Check for Updates** checks now; it says which version you're running, and once an update is found, which version is available. The first time Quick Describe starts after an update, it says so, with See what's new.
 
 ## Using it
 
@@ -42,6 +42,12 @@ In Quick Describe itself:
 
 You can also drop a picture file on the window. The Describe menu does the same as the hotkeys: it steps out of the way first, so it describes what's behind Quick Describe. **Describe, Description Type** chooses how much detail you get: Accessible (the default, written for people who are blind or have low vision), Detailed, Brief or Diagram. **Help, Check Windows AI** says whether your PC can describe pictures, and why not if it can't.
 
+## Reporting a bug or suggesting something
+
+Choose **Help, Report a Bug…**. The form asks what happened, what you expected and the steps (or, for a suggestion, what you'd like), with an optional contact, and shows exactly what will be sent. Send files it as an issue on GitHub for you; you don't need a GitHub account. **Everything in a report is public**, the contact included. It includes your Quick Describe and Windows versions and what Windows AI says it can do, unless you untick Include the system check. Your user name is written as %USERPROFILE%. If a report can't be sent, Quick Describe copies it and offers to open it on GitHub, filled in, for you to submit there.
+
+If Quick Describe didn't quit properly last time, it offers once to report that, with the end of its log. **Help, Open Log Folder** shows that log: what Quick Describe started with and what went wrong, one file a day, kept for two weeks. It stays on your PC unless you send it.
+
 If another app already uses one of the hotkeys, Quick Describe says which when it starts, and the Describe menu still works.
 
 ## What to expect
@@ -54,7 +60,13 @@ If another app already uses one of the hotkeys, Quick Describe says which when i
 
 ## Privacy
 
-Pictures are described and read on your PC by Windows itself. Quick Describe doesn't send anything over the internet; the first time, Windows may download its AI model. The screen is captured only when you press a hotkey or choose a command, pictures and results aren't saved, and the only thing Quick Describe keeps is your choice of description type.
+Pictures are described and read on your PC by Windows itself, and never sent anywhere. The screen is captured only when you press a hotkey or choose a command, and pictures and results aren't saved. Quick Describe keeps your choice of description type, what its update checks found, and its log.
+
+What goes over the internet:
+
+- **Update checks.** When Quick Describe starts and while it runs, at most once a day, and when you choose Check for Updates, Quick Describe and Windows read the release information from GitHub, where Quick Describe is published. Nothing about you or your pictures is sent.
+- **Bug reports,** only when you press Send in Report a Bug. They go through The Idea Place's bug-report relay to GitHub, where they're public.
+- **Windows' AI model.** The first time, Windows may download it.
 
 ## For developers
 

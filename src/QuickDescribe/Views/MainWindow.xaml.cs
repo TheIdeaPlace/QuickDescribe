@@ -29,7 +29,8 @@ public partial class MainWindow : Window
     /// <summary>What's being described, for saying it stopped.</summary>
     private string? _describing;
 
-    /// <summary>A dialog (Open Picture) is open: hotkeys wait until it's closed.</summary>
+    /// <summary>A dialog is open, or about to be (Report a Bug while it's prepared): hotkeys wait until it's closed. Any
+    /// modal dialog also disables this window, which <see cref="OnHotKey"/> checks too.</summary>
     private bool _dialogOpen;
 
     /// <summary>A result that arrived while Quick Describe wasn't in front: spoken when it next is.</summary>
@@ -80,7 +81,12 @@ public partial class MainWindow : Window
     {
         ResultBox.Focus();
         // Said as well as shown: a screen reader reads only the box's first line when it gets focus.
-        if (_hotKeys is { Unavailable.Count: > 0 }) Announcer.Announce(HotKeyConflict());
+        if (_hotKeys is { Unavailable.Count: > 0 })
+        {
+            Log.Write("start", $"Hotkeys another app has: {string.Join(", ", _hotKeys.Unavailable.Select(HotKeys.GestureFor))}");
+            Announcer.Announce(HotKeyConflict());
+        }
+        AfterStart();
     }
 
     private string HotKeyConflict() =>
@@ -111,15 +117,16 @@ public partial class MainWindow : Window
         "Describe, Description Type chooses Accessible, Detailed, Brief or Diagram descriptions. " +
         "You can also open a picture file (Ctrl+O) or drop one on this window. " +
         "Pictures are described with Windows' on-device AI on Copilot+ PCs, and their text read with Windows' text recognition. " +
-        "Nothing leaves this PC.";
+        "Pictures never leave this PC.";
 
     // ---- Describing ----
 
     private void OnHotKey(Target target)
     {
-        if (_dialogOpen)
+        if (_dialogOpen || !Native.IsWindowEnabled(_handle))
         {
-            // The dialog has focus, and describing would bring this window up behind it.
+            // A dialog has focus (Open Picture, Report a Bug, a question or a message), and describing would bring this
+            // window up behind it.
             SystemSounds.Beep.Play();
             return;
         }
@@ -173,6 +180,7 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             // Anything at all: said, rather than lost with Quick Describe still minimized.
+            Log.Error("capture", $"Taking the picture ({target}) failed", ex);
             (picture, problem) = (null, $"The picture couldn't be taken: {ex.Message.Trim()}");
         }
         finally

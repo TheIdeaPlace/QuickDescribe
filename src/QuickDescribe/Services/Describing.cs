@@ -35,10 +35,12 @@ public static class Describing
         }
         catch (DescriptionException ex)
         {
+            Log.Write("describe", $"Not described: {ex.Code}: {ex.Message}");
             return (null, ex.Code, ex.Message);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
+            Log.Error("describe", "Describing failed", ex);
             return (null, "error", $"{ex.Message.Trim()} ({ex.GetType().Name})");
         }
     }
@@ -51,10 +53,12 @@ public static class Describing
         }
         catch (PictureException ex)
         {
+            Log.Write("text", ex.Message);
             return (null, ex.Message);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
+            Log.Error("text", "Reading the text failed", ex);
             return (null, $"{ex.Message.Trim()} ({ex.GetType().Name})");
         }
     }
