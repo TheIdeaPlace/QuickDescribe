@@ -8,6 +8,19 @@ public sealed class Settings
     /// <summary>The description kind: one of <see cref="WindowsAI.Kinds"/>.</summary>
     public string Kind { get; set; } = WindowsAI.Kinds[0].Id;
 
+    /// <summary>The hotkeys' modifiers (Win32 MOD_ flags) and each command's letter ("" for none), as chosen in Settings;
+    /// null until then, for the defaults. Read through <see cref="HotKeys"/>.</summary>
+    public int? HotKeyModifiers { get; set; }
+    public Dictionary<string, string>? HotKeyLetters { get; set; }
+
+    /// <summary>The hotkeys to use: the ones chosen, or the defaults when none were or they can't be used.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public HotKeyMap HotKeys
+    {
+        get => HotKeyMap.FromSettings(HotKeyModifiers, HotKeyLetters);
+        set => (HotKeyModifiers, HotKeyLetters) = value.ToSettings();
+    }
+
     /// <summary>When updates were last looked for, so the quiet check runs at most once a day.</summary>
     public DateTime? LastUpdateCheck { get; set; }
 

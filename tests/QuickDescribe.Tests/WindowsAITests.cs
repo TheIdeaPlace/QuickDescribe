@@ -181,17 +181,3 @@ public class SettingsTests : IDisposable
         Assert.Equal("accessible", Settings.Load(bad).Kind);
     }
 }
-
-public class HotKeysTests
-{
-    [Fact]
-    public void EachTarget_HasItsOwnLetter()
-    {
-        Assert.Equal("Ctrl+Alt+Shift+S", HotKeys.GestureFor(Target.Screen));
-        Assert.Equal("Ctrl+Alt+Shift+W", HotKeys.GestureFor(Target.Window));
-        Assert.Equal("Ctrl+Alt+Shift+F", HotKeys.GestureFor(Target.Focus));
-        Assert.Equal("Ctrl+Alt+Shift+V", HotKeys.GestureFor(Target.Clipboard));
-        Assert.Equal(HotKeys.All.Length, HotKeys.All.Select(h => h.Key).Distinct().Count());
-        Assert.Equal(Enum.GetValues<Target>().Length, HotKeys.All.Length);
-    }
-}

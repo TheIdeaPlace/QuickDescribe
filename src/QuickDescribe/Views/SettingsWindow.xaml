@@ -1,0 +1,52 @@
+<Window x:Class="QuickDescribe.Views.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Settings" Width="480" SizeToContent="Height" ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
+    <!-- File > Settings: the hotkeys (the keys held, and each command's letter) and the description type. Every list and
+         box is named as its label says: UI Automation showed them unnamed with only the label's Target set. -->
+    <StackPanel Margin="14">
+        <GroupBox Header="Hotkeys, from any app" Padding="8">
+            <StackPanel>
+                <!-- A group of their own, so screen readers say "Hold with each letter" with the boxes (a panel has no
+                     automation element to carry a name). -->
+                <GroupBox Header="Hold with each letter" Padding="6,4" Margin="0,0,0,10">
+                <StackPanel x:Name="ModifierPanel" Orientation="Horizontal">
+                    <CheckBox x:Name="CtrlBox" Content="_Ctrl" Margin="0,0,16,0" Click="Changed" />
+                    <CheckBox x:Name="AltBox" Content="_Alt" Margin="0,0,16,0" Click="Changed" />
+                    <CheckBox x:Name="ShiftBox" Content="S_hift" Margin="0,0,16,0" Click="Changed" />
+                    <CheckBox x:Name="WindowsBox" Content="_Windows key" Click="Changed" />
+                </StackPanel>
+                </GroupBox>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition />
+                    </Grid.RowDefinitions>
+                    <Label Grid.Row="0" Content="_Screen:" Target="{Binding ElementName=ScreenKey}" />
+                    <ComboBox x:Name="ScreenKey" AutomationProperties.Name="Screen" Grid.Row="0" Grid.Column="1" Margin="0,2" SelectionChanged="Changed" />
+                    <Label Grid.Row="1" Content="Active w_indow:" Target="{Binding ElementName=WindowKey}" />
+                    <ComboBox x:Name="WindowKey" AutomationProperties.Name="Active window" Grid.Row="1" Grid.Column="1" Margin="0,2" SelectionChanged="Changed" />
+                    <Label Grid.Row="2" Content="_Focused item:" Target="{Binding ElementName=FocusKey}" />
+                    <ComboBox x:Name="FocusKey" AutomationProperties.Name="Focused item" Grid.Row="2" Grid.Column="1" Margin="0,2" SelectionChanged="Changed" />
+                    <Label Grid.Row="3" Content="C_lipboard picture:" Target="{Binding ElementName=ClipboardKey}" />
+                    <ComboBox x:Name="ClipboardKey" AutomationProperties.Name="Clipboard picture" Grid.Row="3" Grid.Column="1" Margin="0,2" SelectionChanged="Changed" />
+                </Grid>
+                <!-- What the choices add up to, or what's wrong with them. Read with OK (its help text) as well. -->
+                <TextBlock x:Name="SummaryText" TextWrapping="Wrap" Margin="0,8,0,0" />
+            </StackPanel>
+        </GroupBox>
+
+        <Label Content="Description _type:" Target="{Binding ElementName=KindBox}" Margin="0,10,0,0" Padding="0,0,0,3" />
+        <ComboBox x:Name="KindBox" AutomationProperties.Name="Description type" />
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
+            <Button Content="_Reset to Defaults" Padding="10,3" Margin="0,0,16,0" Click="Reset_Click" />
+            <Button x:Name="OkButton" Content="OK" IsDefault="True" MinWidth="80" Padding="10,3" Click="Ok_Click" />
+            <Button Content="Cancel" IsCancel="True" MinWidth="80" Padding="10,3" Margin="8,0,0,0" />
+        </StackPanel>
+    </StackPanel>
+</Window>
