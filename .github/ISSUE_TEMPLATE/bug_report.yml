@@ -1,0 +1,34 @@
+name: Report a problem
+description: Something in Quick Describe doesn't work as it should. (Help, Report a Bug in Quick Describe does this for you, with no GitHub account.)
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Quick Describe version
+      description: Help, About Quick Describe.
+      placeholder: "0.1.0"
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version and PC
+      description: Winver shows the version. Say whether it's a Copilot+ PC.
+      placeholder: "Windows 11 25H2, Copilot+ PC"
+  - type: input
+    id: assistive
+    attributes:
+      label: Screen reader or other assistive technology, if any
+      placeholder: "JAWS 2026, NVDA 2026.3 or Narrator"
+  - type: textarea
+    id: log
+    attributes:
+      label: Log
+      description: If it helps, paste the end of today's log (Help, Open Log Folder). It stays on your PC unless you paste it here, and anything here is public.
+      render: text
