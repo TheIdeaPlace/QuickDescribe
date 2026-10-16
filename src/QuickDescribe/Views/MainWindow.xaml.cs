@@ -40,16 +40,36 @@ public partial class MainWindow : Window
     /// captures: a frame or two.</summary>
     private static readonly TimeSpan LeaveOutOfCapture = TimeSpan.FromMilliseconds(100);
 
+    /// <summary>Starting at sign-in; replaceable in tests.</summary>
+    internal static IStartAtSignIn SignIn { get; set; } = new StartAtSignIn();
+
+    /// <summary>File, Exit (or the notification area icon's Exit, an update, Windows signing out): closing quits, even
+    /// with Keep running on.</summary>
+    private bool _exiting;
+
+    /// <summary>Shown while the window is closed and Quick Describe keeps running.</summary>
+    private TrayIcon? _tray;
+
+    /// <summary>Windows started this run at sign-in: nothing is said or asked until the person first comes to the window.</summary>
+    private bool _quiet;
+
     public MainWindow()
     {
         InitializeComponent();
         BuildKindMenu();
         ShowGestures(_settings.HotKeys);
+        ShowExitGesture();
         ResultBox.Text = Welcome();
         SourceInitialized += OnSourceInitialized;
         Loaded += OnLoaded;
         Activated += (_, _) =>
         {
+            if (_quiet && !_requests.IsRunning)
+            {
+                // Started at sign-in: what a start says and asks waits for the person to come to the window.
+                _quiet = false;
+                AskAtStart();
+            }
             if (_unspoken is not { } text) return;
             _unspoken = null;
             ResultBox.Focus();
@@ -61,6 +81,7 @@ public partial class MainWindow : Window
             _requests.Cancel();
             _hotKeys?.Dispose();
             _ai.Dispose();
+            _tray?.Dispose();
         };
     }
 
@@ -69,21 +90,103 @@ public partial class MainWindow : Window
         _handle = new WindowInteropHelper(this).Handle;
         UseHotKeys(_settings.HotKeys);
         if (_hotKeys!.Unavailable.Count > 0)
+        {
+            Log.Write("start", $"Hotkeys another app has: {string.Join(", ", _hotKeys.Unavailable.Select(_hotKeys.Map.GestureFor))}");
             ResultBox.Text = HotKeyConflict() + Environment.NewLine + Environment.NewLine + Welcome();
+        }
         _ = GetModelReadyAsync(_closing.Token);
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
+        LookForUpdatesFromNowOn();
+        if (_quiet) return;
         ResultBox.Focus();
         // Said as well as shown: a screen reader reads only the box's first line when it gets focus.
-        if (_hotKeys is { Unavailable.Count: > 0 })
-        {
-            Log.Write("start", $"Hotkeys another app has: {string.Join(", ", _hotKeys.Unavailable.Select(_hotKeys.Map.GestureFor))}");
-            Announcer.Announce(HotKeyConflict());
-        }
-        AfterStart();
+        if (_hotKeys is { Unavailable.Count: > 0 }) Announcer.Announce(HotKeyConflict());
+        AskAtStart();
     }
+
+    /// <summary>Started by Windows at sign-in: out of the way, so it doesn't take focus from what the person is doing.
+    /// In the notification area when Keep running is on (the window isn't shown, but has its handle, so the hotkeys
+    /// work), and otherwise minimized on the taskbar.</summary>
+    public void StartQuietly()
+    {
+        _quiet = true;
+        Log.Write("start", $"Started by Windows at sign-in, {(_settings.KeepRunning ? "in the notification area" : "minimized")}");
+        if (_settings.KeepRunning)
+        {
+            new WindowInteropHelper(this).EnsureHandle();
+            ShowTray();
+            LookForUpdatesFromNowOn();
+            return;
+        }
+        ShowActivated = false;
+        WindowState = WindowState.Minimized;
+        Show();
+    }
+
+    // ---- Closing, and keeping running ----
+
+    protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
+    {
+        if (_settings.KeepRunning && !_exiting)
+        {
+            e.Cancel = true;
+            CloseToTray();
+            return;
+        }
+        Log.Write("exit", "Quitting");
+        base.OnClosing(e);
+    }
+
+    /// <summary>Closing with Keep running on: stops a description, hides the window and shows the notification area icon.
+    /// The first time, says where Quick Describe went and how to quit.</summary>
+    private void CloseToTray()
+    {
+        if (_requests.Cancel()) ResultBox.Text = $"Stopped describing {_describing ?? "the picture"}.";
+        _describing = null;
+        _unspoken = null;
+        _returnTo = IntPtr.Zero;
+        Title = AppInfo.Name;
+        if (!_settings.KeepRunningSaid)
+        {
+            _settings.KeepRunningSaid = true;
+            _settings.Save();
+            // A message box, which screen readers read as it opens: an announcement from a window about to hide isn't.
+            KeepRunningNote?.Invoke(this, KeepRunningText);
+        }
+        ShowTray();
+        Hide();
+        Log.Write("exit", "Closed to the notification area");
+    }
+
+    internal const string KeepRunningText =
+        "Quick Describe is still running, in the notification area, so the hotkeys keep working. " +
+        "To quit, choose File, Exit, or Exit from its icon's menu in the notification area. Settings can turn this off.";
+
+    /// <summary>Says where Quick Describe went the first time it's closed with Keep running on; replaceable in tests.</summary>
+    internal static Action<Window, string>? KeepRunningNote { get; set; } =
+        (owner, message) => MessageBox.Show(owner, message, AppInfo.Name, MessageBoxButton.OK, MessageBoxImage.Information);
+
+    private void ShowTray()
+    {
+        _tray ??= new TrayIcon(BringToFront, Exit);
+        _tray.Show();
+    }
+
+    /// <summary>Quits, whatever Keep running says.</summary>
+    public void Exit()
+    {
+        _exiting = true;
+        Close();
+    }
+
+    /// <summary>Windows is signing out, or an update closes Quick Describe: closing then quits.</summary>
+    public void AllowClose() => _exiting = true;
+
+    /// <summary>Alt+F4 next to Exit only while it quits.</summary>
+    private void ShowExitGesture() => ExitItem.InputGestureText = _settings.KeepRunning ? "" : "Alt+F4";
 
     private string HotKeyConflict() =>
         $"{_hotKeys!.Map.Refused(_hotKeys.Unavailable)} The Describe menu still does the same, and File, Settings chooses others.";
@@ -291,6 +394,7 @@ public partial class MainWindow : Window
 
     public void BringToFront()
     {
+        _tray?.Hide();
         if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
         Show();
         Activate();
@@ -370,7 +474,7 @@ public partial class MainWindow : Window
         }
     }
 
-    private void OnExit(object sender, RoutedEventArgs e) => Close();
+    private void OnExit(object sender, RoutedEventArgs e) => Exit();
 
     // ---- Settings ----
 
@@ -400,15 +504,18 @@ public partial class MainWindow : Window
 
     /// <summary>File > Settings: the hotkeys and the description type. The hotkeys chosen are tried as OK is pressed, so a
     /// combination another app has can be changed there; Cancel puts back the ones from before.</summary>
-    private void OnSettings(object sender, RoutedEventArgs e)
+    private async void OnSettings(object sender, RoutedEventArgs e)
     {
         if (_dialogOpen) return;
         var before = _hotKeys!.Map;
-        var dialog = new SettingsWindow(before, _settings.Kind, UseHotKeys) { Owner = this };
         _dialogOpen = true;
+        SettingsWindow dialog;
         bool saved;
         try
         {
+            // Asked of Windows each time: Task Manager or Windows Settings can turn it off meanwhile.
+            var signIn = await SignIn.GetAsync();
+            dialog = new SettingsWindow(before, _settings.Kind, UseHotKeys, signIn, _settings.KeepRunning) { Owner = this };
             saved = dialog.ShowDialog() == true;
         }
         finally
@@ -424,26 +531,58 @@ public partial class MainWindow : Window
         }
         _settings.HotKeys = dialog.Map;
         _settings.Kind = dialog.Kind;
+        _settings.KeepRunning = dialog.KeepRunning;
         _settings.Save();
         ShowKind();
-        Log.Write("settings", $"Hotkeys {SettingsWindow.Summary(dialog.Map)} Description type {dialog.Kind}.");
+        ShowExitGesture();
+        Log.Write("settings", $"Hotkeys {SettingsWindow.Summary(dialog.Map)} Description type {dialog.Kind}. " +
+                              $"Start at sign-in {(dialog.SignIn ? "on" : "off")}. Keep running {(dialog.KeepRunning ? "on" : "off")}.");
         // The welcome or F1 text says the hotkeys, so it's brought up to date; a result in the box is left alone.
         if (!_requests.IsRunning && ResultBox.Text.Contains(Environment.NewLine + "Quick Describe comes to the front", StringComparison.Ordinal))
             ResultBox.Text = Welcome();
         ResultBox.Focus();
         Announcer.Announce("Settings saved. " + SettingsWindow.Summary(dialog.Map));
+        await ApplySignInAsync(dialog.SignIn);
     }
 
-    private void OnShortcuts(object sender, RoutedEventArgs e) => ShowMessage(Welcome() + Environment.NewLine + Environment.NewLine + InAppKeys(), null);
+    /// <summary>Turns starting at sign-in on or off as Settings chose, and says so when Windows doesn't (it was turned off
+    /// in Windows' own startup apps, or by an organization).</summary>
+    private async Task ApplySignInAsync(bool wanted)
+    {
+        var now = await SignIn.GetAsync();
+        if (now == SignInStart.Unavailable || StartAtSignIn.IsOn(now) == wanted) return;
+        var result = await SignIn.SetAsync(wanted);
+        Log.Write("settings", $"Start at sign-in: asked {(wanted ? "on" : "off")}, now {result}");
+        if (StartAtSignIn.Outcome(wanted, result) is not { } message) return;
+        _dialogOpen = true;
+        try
+        {
+            if (result is SignInStart.OffInWindows or SignInStart.On)
+            {
+                if (QuestionDialog.AskSafely(this, "Settings", message, "Open Startup Apps opens that page of Windows Settings.", "_Open Startup Apps", "OK"))
+                    OpenInBrowser("ms-settings:startupapps", "Startup apps are in Windows Settings,");
+            }
+            else MessageBox.Show(this, message, "Settings", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+        finally
+        {
+            _dialogOpen = false;
+        }
+        ResultBox.Focus();
+    }
 
-    private static string InAppKeys() =>
+    private void OnShortcuts(object sender, RoutedEventArgs e) => ShowMessage(Welcome() + Environment.NewLine + Environment.NewLine + InAppKeys(_settings.KeepRunning), null);
+
+    internal static string InAppKeys(bool keepRunning) =>
         "In Quick Describe:" + Environment.NewLine +
         "Ctrl+O opens a picture file." + Environment.NewLine +
         "Ctrl+Comma opens Settings, for the hotkeys and the description type." + Environment.NewLine +
         "Ctrl+V describes the picture on the clipboard." + Environment.NewLine +
         "Ctrl+Shift+C copies the result." + Environment.NewLine +
         "Escape stops describing, minimizes Quick Describe and goes back to where you were. The hotkeys keep working." + Environment.NewLine +
-        "Alt+F4 quits, and the hotkeys stop.";
+        (keepRunning
+            ? "Alt+F4 closes the window, and Quick Describe keeps running in the notification area with the hotkeys working. File, Exit quits."
+            : "Alt+F4 quits, and the hotkeys stop.");
 
     private async void OnCheckAI(object sender, RoutedEventArgs e)
     {

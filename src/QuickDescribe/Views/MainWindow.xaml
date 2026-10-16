@@ -16,7 +16,7 @@
                 <Separator />
                 <MenuItem Header="_Settings…" InputGestureText="Ctrl+Comma" Click="OnSettings" />
                 <Separator />
-                <MenuItem Header="E_xit" InputGestureText="Alt+F4" Click="OnExit" />
+                <MenuItem x:Name="ExitItem" Header="E_xit" InputGestureText="Alt+F4" Click="OnExit" />
             </MenuItem>
             <MenuItem Header="_Describe">
                 <MenuItem x:Name="ScreenItem" Header="_Screen" Click="OnScreen" />
