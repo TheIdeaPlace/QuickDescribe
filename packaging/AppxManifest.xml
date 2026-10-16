@@ -13,10 +13,11 @@
   xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
   xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
   xmlns:uap5="http://schemas.microsoft.com/appx/manifest/uap/windows10/5"
+  xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10"
   xmlns:desktop4="http://schemas.microsoft.com/appx/manifest/desktop/windows10/4"
   xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
   xmlns:systemai="http://schemas.microsoft.com/appx/manifest/systemai/windows10"
-  IgnorableNamespaces="uap uap5 desktop4 rescap systemai">
+  IgnorableNamespaces="uap uap5 desktop desktop4 rescap systemai">
 
   <Identity Name="TheIdeaPlace.QuickDescribe" Publisher="$PUBLISHER$" Version="$VERSION$" ProcessorArchitecture="$ARCH$" />
 
@@ -44,6 +45,13 @@
                           Square44x44Logo="Assets\Square44x44Logo.png">
         <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png" ShortName="$DISPLAYNAME$" />
       </uap:VisualElements>
+      <!-- Settings' "Start Quick Describe when I sign in to Windows" (Services\StartAtSignIn.cs). Off until chosen there;
+           the TaskId is StartAtSignIn.TaskId. -->
+      <Extensions>
+        <desktop:Extension Category="windows.startupTask" Executable="App\QuickDescribe.exe" EntryPoint="Windows.FullTrustApplication">
+          <desktop:StartupTask TaskId="QuickDescribeAtSignIn" Enabled="false" DisplayName="$DISPLAYNAME$" />
+        </desktop:Extension>
+      </Extensions>
     </Application>
     <Application Id="QuickDescribeAI" Executable="AI\QuickDescribeAI.exe" EntryPoint="Windows.FullTrustApplication"
                  desktop4:Subsystem="console" desktop4:SupportsMultipleInstances="true">

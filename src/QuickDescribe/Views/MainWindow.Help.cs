@@ -30,22 +30,32 @@ public partial class MainWindow
 
     // ---- At start ----
 
-    /// <summary>After the window is up: says an update was installed, or else offers to report a crash; then looks for
-    /// updates quietly. Never both questions at once.</summary>
-    private void AfterStart()
+    /// <summary>Once the window is up (or, started at sign-in, when the person first comes to it): says an update was
+    /// installed, or else offers to report a crash. Never both questions at once.</summary>
+    private void AskAtStart()
     {
+        if (_askedAtStart) return;
+        _askedAtStart = true;
         Dispatcher.BeginInvoke(() =>
         {
-            RememberedUpdate();
-            ShowUpdatesItem();
             if (SayIfJustUpdated()) ResultBox.Focus();
             else Dispatcher.BeginInvoke(OfferCrashReport, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
-            _ = LookForUpdatesQuietlyAsync();
-            // Quick Describe is meant to run for days, and Windows installs updates only while it isn't running: so the
-            // quiet look runs again while it's open (still at most once a day).
-            _updateTimer.Tick += (_, _) => _ = LookForUpdatesQuietlyAsync(TimeSpan.Zero);
-            _updateTimer.Start();
         }, System.Windows.Threading.DispatcherPriority.Input);
+    }
+
+    private bool _askedAtStart;
+
+    /// <summary>Looks for updates quietly, from the start, whether or not the window is showing. Once.</summary>
+    private void LookForUpdatesFromNowOn()
+    {
+        if (_updateTimer.IsEnabled) return;
+        RememberedUpdate();
+        ShowUpdatesItem();
+        _ = LookForUpdatesQuietlyAsync();
+        // Quick Describe is meant to run for days, and Windows installs updates only while it isn't running: so the
+        // quiet look runs again while it's open (still at most once a day).
+        _updateTimer.Tick += (_, _) => _ = LookForUpdatesQuietlyAsync(TimeSpan.Zero);
+        _updateTimer.Start();
     }
 
     private readonly System.Windows.Threading.DispatcherTimer _updateTimer = new() { Interval = TimeSpan.FromHours(6) };
@@ -188,8 +198,11 @@ public partial class MainWindow
         _requests.Cancel();
         ResultBox.Text = $"Downloading the update. {AppInfo.Name} will close and open again when it's ready.";
         Announcer.Announce(ResultBox.Text);
+        // Windows closes Quick Describe to install: that close quits, even with Keep running on.
+        AllowClose();
         if (await Updates.InstallAsync(source) is { } error)
         {
+            _exiting = false;
             Log.Write("update", $"The update couldn't be installed: {error}");
             ShowMessage($"The update couldn't be installed. {error}", null);
         }
@@ -246,6 +259,7 @@ public partial class MainWindow
             lines.Add($"Hotkeys another app has: {string.Join(", ", _hotKeys.Unavailable.Select(_hotKeys.Map.GestureFor))}");
         var inUse = _hotKeys?.Map ?? _settings.HotKeys;
         lines.Add($"Hotkeys: {SettingsWindow.Summary(inUse)}{(inUse.AllowConflicts ? " Key combinations other apps use: allowed." : "")}");
+        lines.Add($"Start at sign-in: {await _startup.GetAsync()}. Keep running when closed: {(_settings.KeepRunning ? "on" : "off")}.");
         return string.Join("\n", lines);
     }
 

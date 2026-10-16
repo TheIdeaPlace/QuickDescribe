@@ -63,12 +63,15 @@ public partial class App : Application
         SessionEnding += (_, _) =>
         {
             Log.Write("exit", "Windows is signing out or shutting down");
+            (MainWindow as Views.MainWindow)?.AllowClose();
             CrashCheck.End();
         };
 
         var window = new Views.MainWindow();
         MainWindow = window;
-        window.Show();
+        // Started by Windows at sign-in: out of the way. Started by the person: in front.
+        if (StartAtSignIn.StartedBySignIn()) window.StartQuietly();
+        else window.Show();
 
         var signal = _showSignal;
         new Thread(() =>

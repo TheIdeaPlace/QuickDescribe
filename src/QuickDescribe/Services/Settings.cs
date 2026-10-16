@@ -24,6 +24,13 @@ public sealed class Settings
         set => (HotKeyModifiers, HotKeyLetters, HotKeysAllowConflicts) = value.ToSettings();
     }
 
+    /// <summary>Settings' "Keep running in the notification area when I close the window": closing then hides the window
+    /// and the hotkeys keep working, until File, Exit. Off unless chosen.</summary>
+    public bool KeepRunning { get; set; }
+
+    /// <summary>The first close with Keep running on says where Quick Describe went; once.</summary>
+    public bool KeepRunningSaid { get; set; }
+
     /// <summary>When updates were last looked for, so the quiet check runs at most once a day.</summary>
     public DateTime? LastUpdateCheck { get; set; }
 

@@ -7,7 +7,7 @@ namespace QuickDescribe.Views;
 
 /// <summary>
 /// File > Settings: the keys held with every hotkey (check boxes), each command's letter (A to Z, or None to turn it off),
-/// and the description type. OK checks the choices (<see cref="HotKeyMap.Problems"/>) and then tries them with Windows:
+/// the description type, starting at sign-in and keeping running when closed. OK checks the choices (<see cref="HotKeyMap.Problems"/>) and then tries them with Windows:
 /// a combination another app already has is said, and OK pressed again keeps it anyway (the Describe menu still works).
 /// </summary>
 public partial class SettingsWindow : Window
@@ -24,19 +24,31 @@ public partial class SettingsWindow : Window
     /// <summary>The choices, once OK has been pressed and they've been applied.</summary>
     public HotKeyMap Map { get; private set; }
     public string Kind { get; private set; }
+    public bool SignIn { get; private set; }
+    public bool KeepRunning { get; private set; }
 
     /// <param name="apply">Puts a map into use and says which of its hotkeys Windows refused (another app has them).</param>
-    public SettingsWindow(HotKeyMap map, string kind, Func<HotKeyMap, IReadOnlyList<Target>> apply)
+    /// <param name="signIn">Whether Windows starts Quick Describe at sign-in now.</param>
+    public SettingsWindow(HotKeyMap map, string kind, Func<HotKeyMap, IReadOnlyList<Target>> apply, SignInStart signIn, bool keepRunning)
     {
         InitializeComponent();
         _apply = apply;
         _opened = map;
         Map = map;
         Kind = kind;
+        SignIn = StartAtSignIn.IsOn(signIn);
+        KeepRunning = keepRunning;
+        // Said in the label, as well as after OK: a screen reader reads the label with the box.
+        if (StartAtSignIn.StateNote(signIn) is { } note) SignInBox.Content = $"{SignInBox.Content} ({note})";
+        if (signIn == SignInStart.Unavailable)
+        {
+            SignInBox.Visibility = Visibility.Collapsed;
+            SignInUnavailable.Visibility = Visibility.Visible;
+        }
         var letters = new[] { NoneItem }.Concat(Enumerable.Range('A', 26).Select(c => ((char)c).ToString())).ToList();
         foreach (var box in Keys) box.ItemsSource = letters;
         foreach (var (id, title) in WindowsAI.Kinds) KindBox.Items.Add(new ComboBoxItem { Content = title, Tag = id });
-        Show(map, kind);
+        Show(map, kind, SignIn, keepRunning);
         Loaded += (_, _) => CtrlBox.Focus();
     }
 
@@ -46,8 +58,10 @@ public partial class SettingsWindow : Window
 
     private bool _showing;
 
-    private void Show(HotKeyMap map, string kind)
+    private void Show(HotKeyMap map, string kind, bool signIn, bool keepRunning)
     {
+        SignInBox.IsChecked = signIn;
+        KeepRunningBox.IsChecked = keepRunning;
         _showing = true;
         CtrlBox.IsChecked = map.Modifiers.HasFlag(KeyModifiers.Ctrl);
         AltBox.IsChecked = map.Modifiers.HasFlag(KeyModifiers.Alt);
@@ -98,9 +112,9 @@ public partial class SettingsWindow : Window
 
     private void Reset_Click(object sender, RoutedEventArgs e)
     {
-        Show(HotKeyMap.Default, WindowsAI.Kinds[0].Id);
+        Show(HotKeyMap.Default, WindowsAI.Kinds[0].Id, false, false);
         _warnedAbout = null;
-        Announcer.Announce($"Back to the defaults. {SummaryText.Text}");
+        Announcer.Announce($"Back to the defaults. {SummaryText.Text} Starting with Windows and keeping running are off.");
     }
 
     private void Ok_Click(object sender, RoutedEventArgs e)
@@ -119,6 +133,9 @@ public partial class SettingsWindow : Window
             return;
         }
         Kind = (string)((ComboBoxItem)KindBox.SelectedItem).Tag;
+        // Applied by the main window once Settings closes: a choice Windows doesn't take is said then.
+        if (SignInBox.Visibility == Visibility.Visible) SignIn = SignInBox.IsChecked == true;
+        KeepRunning = KeepRunningBox.IsChecked == true;
         // Tried with Windows now, so a combination another app has is said here, where it can be changed.
         var refused = _apply(map);
         Map = map;

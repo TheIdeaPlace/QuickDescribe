@@ -28,7 +28,7 @@ These are the defaults; **File, Settings** changes them (see below).
 
 Quick Describe comes to the front with "Describing…", and your screen reader says what it's describing. When it's done, it speaks the description and how many lines of text it found. The full result is in the Result box, where focus is, to read by line, word or character: the description first, then "Text in the picture:" and the text, line by line.
 
-Press **Escape** to go back to where you were. Quick Describe minimizes, and the hotkeys keep working. Pressed while it's still describing, Escape also stops that. If you switch to another app while it's describing, it doesn't pull you back or talk over that app: the result is waiting in Quick Describe, and spoken, when you return. **Alt+F4** quits, and the hotkeys stop.
+Press **Escape** to go back to where you were. Quick Describe minimizes, and the hotkeys keep working. Pressed while it's still describing, Escape also stops that. If you switch to another app while it's describing, it doesn't pull you back or talk over that app: the result is waiting in Quick Describe, and spoken, when you return. **Alt+F4** quits, and the hotkeys stop, unless you've chosen to keep Quick Describe running (see Settings): then Alt+F4 closes the window and **File, Exit** quits.
 
 Quick Describe leaves itself out of its own pictures, so a screen described while it's showing is the screen behind it. (Only for that moment: screen sharing and screenshots see it as usual.) A hotkey pressed while Quick Describe's Open Picture dialog is up just beeps.
 
@@ -60,8 +60,10 @@ If another app already uses one of the hotkeys, Quick Describe says which when i
 - **The keys held with every hotkey:** Ctrl, Alt, Shift and the Windows key, as check boxes. Hold at least two of Ctrl, Alt and the Windows key, or the Windows key: with Ctrl or Alt alone, a hotkey would take that key from every app (Ctrl+V would stop pasting anywhere). To use Ctrl+Shift, Alt+Shift, or Ctrl or Alt alone, anyway, check **Allow key combinations other apps use**, which is off unless you choose it. OK then asks you to confirm, naming what you give up: while Quick Describe runs, those keys describe instead of doing what they do in other apps (Ctrl+Shift+S would describe instead of Save As). With Alt alone, Alt+F, Alt+D, Alt+E and Alt+H also stop opening Quick Describe's own menus; Ctrl+Comma still opens Settings. Shift alone is never allowed, since the letters would stop typing. On many keyboards outside the US, Ctrl+Alt is AltGr, which types accented letters; if a hotkey gets in the way of one, choose another letter, or hold the Windows key instead.
 - **A letter for each command:** Screen, Active window, Focused item and Clipboard picture, from A to Z, or None to turn that hotkey off. Each needs its own letter.
 - **The description type:** Accessible, Detailed, Brief or Diagram, as in the Describe menu.
+- **Start Quick Describe when I sign in to Windows:** off unless you turn it on. Windows then starts it out of the way, without taking focus: in the notification area if it keeps running (below), and otherwise minimized on the taskbar. Anything it would ask at the start, such as saying an update was installed, waits until you first come to its window, or, if you've only used hotkeys, until you first press Escape. Quick Describe is then listed in Task Manager's Startup apps and in Windows Settings, Apps, Startup, where you can turn it off too. Turned off there, only you can turn it on again, there: Settings says so next to the check box, and if you check it anyway, offers to open the page. Only the installed copy can start at sign-in.
+- **Keep running in the notification area when I close the window:** off unless you turn it on. Quick Describe's icon is then in the notification area the whole time, and closing the window (Alt+F4, or its Close button) hides it and leaves the hotkeys working; the first time, Quick Describe says where it went. A hotkey brings it back with the result, and so does choosing its icon (Windows+B, then the arrow keys and Enter; new icons start in the hidden icons, behind Show Hidden Icons). The icon's menu (Shift+F10 or the Applications key) has Open and Exit. **File, Exit** quits. Escape still minimizes to the taskbar, as it always does.
 
-OK tries the hotkeys with Windows. If another app (or Windows itself, which keeps many Windows key combinations) already has one, Settings says which, so you can choose another letter; OK again keeps it anyway. **Reset to Defaults** goes back to Ctrl+Alt+Shift with S, W, F and V, and Accessible descriptions.
+OK tries the hotkeys with Windows. If another app (or Windows itself, which keeps many Windows key combinations) already has one, Settings says which, so you can choose another letter; OK again keeps it anyway. **Reset to Defaults** goes back to Ctrl+Alt+Shift with S, W, F and V, Accessible descriptions, and both check boxes off.
 
 ## What to expect
 
@@ -73,7 +75,7 @@ OK tries the hotkeys with Windows. If another app (or Windows itself, which keep
 
 ## Privacy
 
-Pictures are described and read on your PC by Windows itself, and never sent anywhere. The screen is captured only when you press a hotkey or choose a command, and pictures and results aren't saved. Quick Describe keeps your choice of description type, what its update checks found, and its log.
+Pictures are described and read on your PC by Windows itself, and never sent anywhere. The screen is captured only when you press a hotkey or choose a command, and pictures and results aren't saved. Quick Describe keeps your settings, what its update checks found, and its log.
 
 What goes over the internet:
 

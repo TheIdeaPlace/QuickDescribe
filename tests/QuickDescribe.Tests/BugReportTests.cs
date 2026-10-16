@@ -187,17 +187,17 @@ public sealed class BugReportTests
     [Fact]
     public void ACrashReport_HasTheNewestLogsLastLines_CutAndWithoutTheUserFolder()
     {
+        // Dated after any real day, so they're the newest logs even while other tests, running alongside, write today's:
+        // assuming the folder empty made this test fail now and then.
         Directory.CreateDirectory(Log.Folder);
-        foreach (var f in Directory.EnumerateFiles(Log.Folder, "QuickDescribe-*.log")) File.Delete(f);
-        Assert.Empty(CrashCheck.Attachments());
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        File.WriteAllLines(Path.Combine(Log.Folder, "QuickDescribe-2026-10-01.log"), ["old"]);
-        File.WriteAllLines(Path.Combine(Log.Folder, "QuickDescribe-2026-10-12.log"),
+        File.WriteAllLines(Path.Combine(Log.Folder, "QuickDescribe-2099-10-01.log"), ["old"]);
+        File.WriteAllLines(Path.Combine(Log.Folder, "QuickDescribe-2099-10-12.log"),
             [.. Enumerable.Range(1, 50).Select(i => $"line {i}"), $"[crash] Unhandled in {home}\\Pictures " + new string('x', 3000)]);
         try
         {
             var a = Assert.Single(CrashCheck.Attachments());
-            Assert.Equal("Diagnostic log, QuickDescribe-2026-10-12.log (last 40 lines)", a.Heading);
+            Assert.Equal("Diagnostic log, QuickDescribe-2099-10-12.log (last 40 lines)", a.Heading);
             var lines = a.Text.Split('\n');
             Assert.Equal(40, lines.Length);
             Assert.Equal("line 12", lines[0]);
@@ -207,7 +207,7 @@ public sealed class BugReportTests
         }
         finally
         {
-            foreach (var f in Directory.EnumerateFiles(Log.Folder, "QuickDescribe-2026-10-*.log")) File.Delete(f);
+            foreach (var f in Directory.EnumerateFiles(Log.Folder, "QuickDescribe-2099-10-*.log")) File.Delete(f);
         }
     }
 }
