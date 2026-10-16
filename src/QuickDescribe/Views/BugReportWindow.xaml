@@ -26,21 +26,21 @@
                     </StackPanel>
                     <Label Content="_Title:" Target="{Binding ElementName=TitleBox}" Padding="0,0,0,3" />
                     <!-- The relay keeps 200 characters of a title. -->
-                    <TextBox x:Name="TitleBox" MaxLength="200" Margin="0,0,0,8" TextChanged="Field_Changed" />
+                    <TextBox x:Name="TitleBox" AutomationProperties.Name="Title" MaxLength="200" Margin="0,0,0,8" TextChanged="Field_Changed" />
                     <StackPanel x:Name="BugFields">
                         <Label Content="What _happened:" Target="{Binding ElementName=HappenedBox}" Padding="0,0,0,3" />
-                        <TextBox x:Name="HappenedBox" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="60" Margin="0,0,0,8" TextChanged="Field_Changed" />
+                        <TextBox x:Name="HappenedBox" AutomationProperties.Name="What happened" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="60" Margin="0,0,0,8" TextChanged="Field_Changed" />
                         <Label Content="What you _expected:" Target="{Binding ElementName=ExpectedBox}" Padding="0,0,0,3" />
-                        <TextBox x:Name="ExpectedBox" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="44" Margin="0,0,0,8" TextChanged="Field_Changed" />
+                        <TextBox x:Name="ExpectedBox" AutomationProperties.Name="What you expected" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="44" Margin="0,0,0,8" TextChanged="Field_Changed" />
                         <Label Content="Ste_ps:" Target="{Binding ElementName=StepsBox}" Padding="0,0,0,3" />
-                        <TextBox x:Name="StepsBox" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="60" Margin="0,0,0,8" TextChanged="Field_Changed" />
+                        <TextBox x:Name="StepsBox" AutomationProperties.Name="Steps" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="60" Margin="0,0,0,8" TextChanged="Field_Changed" />
                     </StackPanel>
                     <StackPanel x:Name="SuggestionFields" Visibility="Collapsed">
                         <Label Content="_Your suggestion:" Target="{Binding ElementName=SuggestionBox}" Padding="0,0,0,3" />
-                        <TextBox x:Name="SuggestionBox" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="90" Margin="0,0,0,8" TextChanged="Field_Changed" />
+                        <TextBox x:Name="SuggestionBox" AutomationProperties.Name="Your suggestion" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="90" Margin="0,0,0,8" TextChanged="Field_Changed" />
                     </StackPanel>
                     <Label Content="_Contact (optional):" Target="{Binding ElementName=ContactBox}" Padding="0,0,0,3" />
-                    <TextBox x:Name="ContactBox" Margin="0,0,0,3" TextChanged="Field_Changed" />
+                    <TextBox x:Name="ContactBox" AutomationProperties.Name="Contact (optional)" Margin="0,0,0,3" TextChanged="Field_Changed" />
                     <!-- Said with the field (its help text) as well as shown, so nobody types an address without hearing it. -->
                     <TextBlock x:Name="ContactNote" TextWrapping="Wrap" Margin="0,0,0,8"
                                Foreground="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}" />
@@ -72,7 +72,7 @@
             <!-- Only when the clipboard couldn't take it, so the report can still be copied. -->
             <StackPanel x:Name="ReportTextPanel" Visibility="Collapsed" Margin="0,0,0,12">
                 <Label Content="_Report:" Target="{Binding ElementName=ReportTextBox}" Padding="0,0,0,3" />
-                <TextBox x:Name="ReportTextBox" IsReadOnly="True" IsReadOnlyCaretVisible="True" TextWrapping="Wrap" FontFamily="Consolas"
+                <TextBox x:Name="ReportTextBox" AutomationProperties.Name="Report" IsReadOnly="True" IsReadOnlyCaretVisible="True" TextWrapping="Wrap" FontFamily="Consolas"
                          MinHeight="160" MaxHeight="360" VerticalScrollBarVisibility="Auto" />
             </StackPanel>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">

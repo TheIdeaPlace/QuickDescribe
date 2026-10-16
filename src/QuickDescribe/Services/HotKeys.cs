@@ -69,7 +69,7 @@ public sealed record HotKeyMap(KeyModifiers Modifiers, IReadOnlyDictionary<Targe
             if (letter is not (>= 'A' and <= 'Z'))
                 problems.Add($"{letter} isn't a letter from A to Z.");
         foreach (var same in Targets.Where(t => LetterFor(t) is not null).GroupBy(t => LetterFor(t)).Where(g => g.Count() > 1))
-            problems.Add($"{string.Join(" and ", same.Select(Title))} both use {same.Key}. Give each its own letter.");
+            problems.Add($"{Joined(same.Select(Title))} {(same.Count() == 2 ? "both use" : "all use")} {same.Key}. Give each its own letter.");
         return problems;
     }
 
@@ -86,6 +86,19 @@ public sealed record HotKeyMap(KeyModifiers Modifiers, IReadOnlyDictionary<Targe
                 ? char.ToUpperInvariant(one[0]) : (char?)null));
         return map.Problems().Count == 0 ? map : Default;
     }
+
+    /// <summary>"A, B and C".</summary>
+    public static string Joined(IEnumerable<string?> items)
+    {
+        var list = items.OfType<string>().ToList();
+        return list.Count <= 1 ? string.Concat(list) : $"{string.Join(", ", list.Take(list.Count - 1))} and {list[^1]}";
+    }
+
+    /// <summary>What's said when Windows refused some hotkeys: another app has them, or Windows keeps them for itself (as it
+    /// does many Windows key combinations).</summary>
+    public string Refused(IReadOnlyList<Target> refused) =>
+        $"{Joined(refused.Select(GestureFor))} {(refused.Count == 1 ? "is" : "are")} already taken, by another app or by Windows itself, " +
+        $"so {(refused.Count == 1 ? "it doesn't" : "they don't")} work from other apps.";
 
     public bool SameAs(HotKeyMap other) => Modifiers == other.Modifiers && Targets.All(t => LetterFor(t) == other.LetterFor(t));
 }

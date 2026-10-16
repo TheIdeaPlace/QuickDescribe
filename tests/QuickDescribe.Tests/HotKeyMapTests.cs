@@ -102,4 +102,14 @@ public class HotKeyMapTests
         Assert.DoesNotContain("clipboard.", text.Split(Environment.NewLine + Environment.NewLine)[0]);
         Assert.StartsWith("No hotkeys are set", MainWindow.Welcome(Map(KeyModifiers.Ctrl, null, null, null, null)));
     }
+
+    [Fact]
+    public void RefusedHotkeys_AreListedPlainly()
+    {
+        var map = HotKeyMap.Default;
+        Assert.Equal("Ctrl+Alt+Shift+S is already taken, by another app or by Windows itself, so it doesn't work from other apps.",
+            map.Refused([Target.Screen]));
+        Assert.Equal("Ctrl+Alt+Shift+S, Ctrl+Alt+Shift+W and Ctrl+Alt+Shift+V are already taken, by another app or by Windows itself, " +
+                     "so they don't work from other apps.", map.Refused([Target.Screen, Target.Window, Target.Clipboard]));
+    }
 }

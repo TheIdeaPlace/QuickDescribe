@@ -86,8 +86,7 @@ public partial class MainWindow : Window
     }
 
     private string HotKeyConflict() =>
-        $"Another app already uses {string.Join(", ", _hotKeys!.Unavailable.Select(_hotKeys.Map.GestureFor))}, so " +
-        "those don't work from other apps. The Describe menu still does the same.";
+        $"{_hotKeys!.Map.Refused(_hotKeys.Unavailable)} The Describe menu still does the same, and File, Settings chooses others.";
 
     /// <summary>Gets Windows' model ready in the background if it only needs downloading, then warms it up, so the first
     /// description isn't the one that waits for either. Not on energy saver, where the person has asked Windows to save

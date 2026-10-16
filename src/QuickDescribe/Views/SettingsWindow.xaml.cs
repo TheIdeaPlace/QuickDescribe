@@ -110,9 +110,8 @@ public partial class SettingsWindow : Window
         if (refused.Count > 0 && (_warnedAbout is null || !_warnedAbout.SameAs(map)))
         {
             _warnedAbout = map;
-            Tell($"Another app already uses {string.Join(" and ", refused.Select(t => map.GestureFor(t)))}, so " +
-                 $"{(refused.Count == 1 ? "it doesn't" : "they don't")} work from other apps. Choose another letter, or press OK again to keep " +
-                 $"{(refused.Count == 1 ? "it" : "them")} anyway.", KeyFor(refused[0]));
+            Tell($"{map.Refused(refused)} Choose another letter, or press OK again to keep {(refused.Count == 1 ? "it" : "them")} anyway.",
+                KeyFor(refused[0]));
             return;
         }
         DialogResult = true;

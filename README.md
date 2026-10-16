@@ -24,6 +24,8 @@ Start Quick Describe. While it's running, these keys work from any app:
 | Ctrl+Alt+Shift+F | The item with keyboard focus, and what's around it |
 | Ctrl+Alt+Shift+V | A picture on the clipboard, or a picture file you've copied |
 
+These are the defaults; **File, Settings** changes them (see below).
+
 Quick Describe comes to the front with "Describing…", and your screen reader says what it's describing. When it's done, it speaks the description and how many lines of text it found. The full result is in the Result box, where focus is, to read by line, word or character: the description first, then "Text in the picture:" and the text, line by line.
 
 Press **Escape** to go back to where you were. Quick Describe minimizes, and the hotkeys keep working. Pressed while it's still describing, Escape also stops that. If you switch to another app while it's describing, it doesn't pull you back or talk over that app: the result is waiting in Quick Describe, and spoken, when you return. **Alt+F4** quits, and the hotkeys stop.
@@ -35,6 +37,7 @@ In Quick Describe itself:
 | Keys | Does |
 |---|---|
 | Ctrl+O | Opens a picture file and describes it |
+| Ctrl+Comma | Opens Settings |
 | Ctrl+V | Describes the picture on the clipboard |
 | Ctrl+Shift+C | Copies the result |
 | F1 | Shows the keys |
@@ -49,6 +52,16 @@ Choose **Help, Report a Bug…**. The form asks what happened, what you expected
 If Quick Describe didn't quit properly last time, it offers once to report that, with the end of its log. **Help, Open Log Folder** shows that log: what Quick Describe started with and what went wrong, one file a day, kept for two weeks. It stays on your PC unless you send it.
 
 If another app already uses one of the hotkeys, Quick Describe says which when it starts, and the Describe menu still works.
+
+## Settings
+
+**File, Settings** (Ctrl+Comma) chooses:
+
+- **The keys held with every hotkey:** Ctrl, Alt, Shift and the Windows key, as check boxes. At least one of Ctrl, Alt or the Windows key is needed, so the letters still work for typing.
+- **A letter for each command:** Screen, Active window, Focused item and Clipboard picture, from A to Z, or None to turn that hotkey off. Each needs its own letter.
+- **The description type:** Accessible, Detailed, Brief or Diagram, as in the Describe menu.
+
+OK tries the hotkeys with Windows. If another app (or Windows itself, which keeps many Windows key combinations) already has one, Settings says which, so you can choose another letter; OK again keeps it anyway. **Reset to Defaults** goes back to Ctrl+Alt+Shift with S, W, F and V, and Accessible descriptions.
 
 ## What to expect
 
