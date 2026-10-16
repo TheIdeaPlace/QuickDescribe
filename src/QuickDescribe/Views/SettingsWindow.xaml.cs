@@ -129,21 +129,31 @@ public partial class SettingsWindow : Window
     internal static bool ShouldWarn(HotKeyMap opened, HotKeyMap chosen, IReadOnlyList<Target> refused, HotKeyMap? warnedAbout) =>
         refused.Count > 0 && !chosen.SameAs(opened) && (warnedAbout is null || !warnedAbout.SameAs(chosen));
 
+    /// <summary>The list to fix when two commands share a letter: the one changed since Settings opened (the letter just
+    /// chosen), or else the later one.</summary>
     private Control FirstDuplicate(HotKeyMap map) =>
         HotKeyMap.Targets.Where(t => map.LetterFor(t) is not null).GroupBy(t => map.LetterFor(t)).FirstOrDefault(g => g.Count() > 1) is { } same
-            ? KeyFor(same.Last())
+            ? KeyFor(same.FirstOrDefault(t => map.LetterFor(t) != _opened.LetterFor(t), same.Last()))
             : CtrlBox;
 
-    /// <summary>Says what's wrong and puts focus where it can be fixed. The message is that control's help text, so the
-    /// screen reader says it with the control rather than an announcement being cut off by the move (as in Report a Bug).</summary>
+    /// <summary>Says what's wrong in a message box, logs it, and then puts focus where it can be fixed (with the message
+    /// as that control's help text too).</summary>
     private void Tell(string message, Control fix)
     {
+        Log.Write("settings", $"OK didn't save: {message}");
         SummaryText.Text = message;
         AutomationProperties.SetHelpText(OkButton, message);
         if (_toldOn is not null) AutomationProperties.SetHelpText(_toldOn, "");
         AutomationProperties.SetHelpText(fix, message);
         _toldOn = fix;
-        if (fix.IsKeyboardFocused) Announcer.Announce(message); // no move to say it with
-        else fix.Focus();
+        // A message box, which JAWS and NVDA both read as it opens. Help text alone wasn't enough: NVDA reads it with the
+        // control focus moves to, JAWS doesn't, so with JAWS pressing OK seemed to do nothing (Kelly, 16 Oct 2026). Closing
+        // it puts focus where the fix goes.
+        Problem?.Invoke(this, message);
+        fix.Focus();
     }
+
+    /// <summary>Shows why OK didn't close; replaceable in tests.</summary>
+    internal static Action<Window, string>? Problem { get; set; } =
+        (owner, message) => MessageBox.Show(owner, message, "Settings", MessageBoxButton.OK, MessageBoxImage.Warning);
 }
