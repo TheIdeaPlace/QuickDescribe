@@ -44,10 +44,7 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         BuildKindMenu();
-        ScreenItem.InputGestureText = HotKeys.GestureFor(Target.Screen);
-        WindowItem.InputGestureText = HotKeys.GestureFor(Target.Window);
-        FocusItem.InputGestureText = HotKeys.GestureFor(Target.Focus);
-        ClipboardItem.InputGestureText = $"Ctrl+V, or {HotKeys.GestureFor(Target.Clipboard)}";
+        ShowGestures(_settings.HotKeys);
         ResultBox.Text = Welcome();
         SourceInitialized += OnSourceInitialized;
         Loaded += OnLoaded;
@@ -70,9 +67,8 @@ public partial class MainWindow : Window
     private void OnSourceInitialized(object? sender, EventArgs e)
     {
         _handle = new WindowInteropHelper(this).Handle;
-        _hotKeys = new HotKeys(HwndSource.FromHwnd(_handle));
-        _hotKeys.Pressed += OnHotKey;
-        if (_hotKeys.Unavailable.Count > 0)
+        UseHotKeys(_settings.HotKeys);
+        if (_hotKeys!.Unavailable.Count > 0)
             ResultBox.Text = HotKeyConflict() + Environment.NewLine + Environment.NewLine + Welcome();
         _ = GetModelReadyAsync(_closing.Token);
     }
@@ -83,14 +79,14 @@ public partial class MainWindow : Window
         // Said as well as shown: a screen reader reads only the box's first line when it gets focus.
         if (_hotKeys is { Unavailable.Count: > 0 })
         {
-            Log.Write("start", $"Hotkeys another app has: {string.Join(", ", _hotKeys.Unavailable.Select(HotKeys.GestureFor))}");
+            Log.Write("start", $"Hotkeys another app has: {string.Join(", ", _hotKeys.Unavailable.Select(_hotKeys.Map.GestureFor))}");
             Announcer.Announce(HotKeyConflict());
         }
         AfterStart();
     }
 
     private string HotKeyConflict() =>
-        $"Another app already uses {string.Join(", ", _hotKeys!.Unavailable.Select(HotKeys.GestureFor))}, so " +
+        $"Another app already uses {string.Join(", ", _hotKeys!.Unavailable.Select(_hotKeys.Map.GestureFor))}, so " +
         "those don't work from other apps. The Describe menu still does the same.";
 
     /// <summary>Gets Windows' model ready in the background if it only needs downloading, then warms it up, so the first
@@ -129,17 +125,31 @@ public partial class MainWindow : Window
         }
     }
 
-    private static string Welcome() =>
-        $"From any app, press {HotKeys.Modifiers} with:" + Environment.NewLine +
-        "S to describe the screen," + Environment.NewLine +
-        "W to describe the active window," + Environment.NewLine +
-        "F to describe the item with focus," + Environment.NewLine +
-        "V to describe a picture on the clipboard." + Environment.NewLine + Environment.NewLine +
+    private string Welcome() => Welcome(_hotKeys?.Map ?? _settings.HotKeys);
+
+    /// <summary>What the Result box says at first, and F1: the hotkeys as they're set, and what else there is.</summary>
+    internal static string Welcome(HotKeyMap map)
+    {
+        var what = new Dictionary<Target, string>
+        {
+            [Target.Screen] = "describe the screen",
+            [Target.Window] = "describe the active window",
+            [Target.Focus] = "describe the item with focus",
+            [Target.Clipboard] = "describe a picture on the clipboard",
+        };
+        var on = HotKeyMap.Targets.Where(t => map.LetterFor(t) is not null).ToList();
+        var keys = on.Count == 0
+            ? "No hotkeys are set: the Describe menu does the same. File, Settings sets them."
+            : $"From any app, press {map.ModifierText} with:" + Environment.NewLine +
+              string.Join("," + Environment.NewLine, on.Select(t => $"{map.LetterFor(t)} to {what[t]}")) + "." +
+              (on.Count < HotKeyMap.Targets.Length ? Environment.NewLine + "File, Settings sets the others." : "");
+        return keys + Environment.NewLine + Environment.NewLine +
         "Quick Describe comes to the front with the result here. Escape goes back to where you were. " +
         "Describe, Description Type chooses Accessible, Detailed, Brief or Diagram descriptions. " +
         "You can also open a picture file (Ctrl+O) or drop one on this window. " +
         "Pictures are described with Windows' on-device AI on Copilot+ PCs, and their text read with Windows' text recognition. " +
-        "Pictures never leave this PC.";
+        "File, Settings chooses the hotkeys. Pictures never leave this PC.";
+    }
 
     // ---- Describing ----
 
@@ -363,11 +373,74 @@ public partial class MainWindow : Window
 
     private void OnExit(object sender, RoutedEventArgs e) => Close();
 
+    // ---- Settings ----
+
+    /// <summary>Registers a map's hotkeys in place of the ones in use, and shows them in the menus. Returns the ones another
+    /// app already has.</summary>
+    private IReadOnlyList<Target> UseHotKeys(HotKeyMap map)
+    {
+        _hotKeys?.Dispose();
+        _hotKeys = new HotKeys(HwndSource.FromHwnd(_handle), map);
+        _hotKeys.Pressed += OnHotKey;
+        ShowGestures(map);
+        return _hotKeys.Unavailable;
+    }
+
+    private void ShowGestures(HotKeyMap map)
+    {
+        ScreenItem.InputGestureText = map.GestureFor(Target.Screen) ?? "";
+        WindowItem.InputGestureText = map.GestureFor(Target.Window) ?? "";
+        FocusItem.InputGestureText = map.GestureFor(Target.Focus) ?? "";
+        ClipboardItem.InputGestureText = map.GestureFor(Target.Clipboard) is { } clipboard ? $"Ctrl+V, or {clipboard}" : "Ctrl+V";
+    }
+
+    private void ShowKind()
+    {
+        foreach (var item in KindMenu.Items.OfType<MenuItem>()) item.IsChecked = (string)item.Tag == _settings.Kind;
+    }
+
+    /// <summary>File > Settings: the hotkeys and the description type. The hotkeys chosen are tried as OK is pressed, so a
+    /// combination another app has can be changed there; Cancel puts back the ones from before.</summary>
+    private void OnSettings(object sender, RoutedEventArgs e)
+    {
+        if (_dialogOpen) return;
+        var before = _hotKeys!.Map;
+        var dialog = new SettingsWindow(before, _settings.Kind, UseHotKeys) { Owner = this };
+        _dialogOpen = true;
+        bool saved;
+        try
+        {
+            saved = dialog.ShowDialog() == true;
+        }
+        finally
+        {
+            _dialogOpen = false;
+        }
+        if (!saved)
+        {
+            // OK may have tried some first (another app had one, and the person then cancelled).
+            if (!_hotKeys.Map.SameAs(before)) UseHotKeys(before);
+            ResultBox.Focus();
+            return;
+        }
+        _settings.HotKeys = dialog.Map;
+        _settings.Kind = dialog.Kind;
+        _settings.Save();
+        ShowKind();
+        Log.Write("settings", $"Hotkeys {SettingsWindow.Summary(dialog.Map)} Description type {dialog.Kind}.");
+        // The welcome or F1 text says the hotkeys, so it's brought up to date; a result in the box is left alone.
+        if (!_requests.IsRunning && ResultBox.Text.Contains(Environment.NewLine + "Quick Describe comes to the front", StringComparison.Ordinal))
+            ResultBox.Text = Welcome();
+        ResultBox.Focus();
+        Announcer.Announce("Settings saved. " + SettingsWindow.Summary(dialog.Map));
+    }
+
     private void OnShortcuts(object sender, RoutedEventArgs e) => ShowMessage(Welcome() + Environment.NewLine + Environment.NewLine + InAppKeys(), null);
 
     private static string InAppKeys() =>
         "In Quick Describe:" + Environment.NewLine +
         "Ctrl+O opens a picture file." + Environment.NewLine +
+        "Ctrl+Comma opens Settings, for the hotkeys and the description type." + Environment.NewLine +
         "Ctrl+V describes the picture on the clipboard." + Environment.NewLine +
         "Ctrl+Shift+C copies the result." + Environment.NewLine +
         "Escape stops describing, minimizes Quick Describe and goes back to where you were. The hotkeys keep working." + Environment.NewLine +
@@ -435,7 +508,7 @@ public partial class MainWindow : Window
             {
                 _settings.Kind = id;
                 _settings.Save();
-                foreach (var other in KindMenu.Items.OfType<MenuItem>()) other.IsChecked = (string)other.Tag == id;
+                ShowKind();
                 Announcer.Announce($"{title} descriptions");
             };
             KindMenu.Items.Add(item);
@@ -466,6 +539,11 @@ public partial class MainWindow : Window
         {
             e.Handled = true;
             OnCopy(sender, e);
+        }
+        else if (e.Key == Key.OemComma && modifiers == ModifierKeys.Control)
+        {
+            e.Handled = true;
+            OnSettings(sender, e);
         }
         else if (e.Key == Key.F1 && modifiers == ModifierKeys.None)
         {

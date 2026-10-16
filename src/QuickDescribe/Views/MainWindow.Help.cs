@@ -243,7 +243,8 @@ public partial class MainWindow
         lines.Add($"Description type: {_settings.Kind}");
         lines.Add($"Built-in text recognition: {string.Join(", ", Windows.Media.Ocr.OcrEngine.AvailableRecognizerLanguages.Select(l => l.LanguageTag))}");
         if (_hotKeys is { Unavailable.Count: > 0 })
-            lines.Add($"Hotkeys another app has: {string.Join(", ", _hotKeys.Unavailable.Select(HotKeys.GestureFor))}");
+            lines.Add($"Hotkeys another app has: {string.Join(", ", _hotKeys.Unavailable.Select(_hotKeys.Map.GestureFor))}");
+        lines.Add($"Hotkeys: {SettingsWindow.Summary(_hotKeys?.Map ?? _settings.HotKeys)}");
         return string.Join("\n", lines);
     }
 
