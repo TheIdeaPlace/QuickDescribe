@@ -54,7 +54,7 @@
                   AutomationProperties.HelpText="Windows starts it out of the way: minimized, or in the notification area when it keeps running. Task Manager's Startup apps can turn it off too." />
         <TextBox x:Name="SignInUnavailable" Margin="0,14,0,0" IsReadOnly="True" TextWrapping="Wrap" Visibility="Collapsed"
                  AutomationProperties.Name="Start when I sign in to Windows"
-                 Text="Starting when you sign in to Windows needs the installed copy of Quick Describe, from its releases page." />
+                 Text="Starting when you sign in to Windows isn't available in this copy. It needs Quick Describe installed from its releases page." />
         <CheckBox x:Name="KeepRunningBox" Content="_Keep running in the notification area when I close the window" Margin="0,8,0,0"
                   AutomationProperties.HelpText="Closing the window, with Alt+F4 or its Close button, leaves the hotkeys working. File, Exit quits." />
 

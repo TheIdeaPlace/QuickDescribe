@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Quick Describe: a small Windows app that describes the screen, the active window, the focused item, a clipboard picture or a picture file, with Windows' on-device AI, and reads the text in it. Kept deliberately simple (Kelly, 15 Oct 2026): on-device only, no cloud providers, no settings beyond the description type.
+Quick Describe: a small Windows app that describes the screen, the active window, the focused item, a clipboard picture or a picture file, with Windows' on-device AI, and reads the text in it. Kept deliberately simple (Kelly, 15 Oct 2026): on-device only, no cloud providers, few settings: the hotkeys, the description type, starting at sign-in and keeping running when closed.
 
 ## Layout
 
@@ -49,6 +49,8 @@ Signing needs, once per repo: the repo in `website/The-Idea-Place-Projects/signi
 ## Settings
 
 `Views/SettingsWindow` edits a `HotKeyMap` (`Services/HotKeys.cs`: the modifiers, each command's letter or none, and `Problems()`, which refuses Shift alone and repeated letters) and the description type. OK applies the map through `MainWindow.UseHotKeys`, which re-registers them and returns the ones Windows refused; Settings says so once, and OK again keeps them. Cancel puts the earlier map back. `Settings.HotKeys` stores it; anything unusable reads as the defaults.
+
+Start at sign-in is the package's startup task (`desktop:StartupTask` in `packaging/AppxManifest.xml`, `Services/StartAtSignIn.cs`), not a Run key: a packaged app's Run key writes go to its private registry, which Windows never reads at sign-in. It's Windows' state, read each time Settings opens, not kept in settings.json; turned off in Task Manager, only the person can turn it on again. Started that way (`StartedBySignIn`), `MainWindow.StartQuietly` keeps out of the way and holds the start's questions until `GreetIfQuiet`. Keep running (`Settings.KeepRunning`) shows `Views/TrayIcon` (WinForms' NotifyIcon, the app's one WinForms use: its implicit usings are removed in the .csproj, so write its types in full) and makes `OnClosing` hide the window unless `_exiting` is set (File > Exit, the icon's Exit, Windows signing out, an update).
 
 ## Updates and bug reports
 

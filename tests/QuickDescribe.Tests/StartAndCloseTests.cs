@@ -107,6 +107,98 @@ public sealed class StartAndCloseTests
         Assert.Contains("notification area", MainWindow.KeepRunningText);
     }
 
+    [Theory]
+    [InlineData(false, false, false)] // closing quits, as it always did
+    [InlineData(true, false, true)]   // Keep running: closing hides
+    [InlineData(true, true, false)]   // File, Exit, the icon's Exit, signing out or an update: quits anyway
+    [InlineData(false, true, false)]
+    public void Closing_HidesOnlyWithKeepRunning_AndNotWhenExiting(bool keepRunning, bool exiting, bool hides) =>
+        Assert.Equal(hides, MainWindow.HidesOnClose(keepRunning, exiting));
+
+    [Fact]
+    public async Task Settings_LeavesTheStartupTaskAlone_WhenItsAlreadyAsChosen_OrCantBeChanged()
+    {
+        var on = new FakeStartup(SignInStart.On);
+        Assert.Null(await StartAtSignIn.ApplyAsync(on, true));
+        var off = new FakeStartup(SignInStart.Off);
+        Assert.Null(await StartAtSignIn.ApplyAsync(off, false));
+        var policy = new FakeStartup(SignInStart.OnByPolicy);
+        Assert.Null(await StartAtSignIn.ApplyAsync(policy, true));
+        var notInstalled = new FakeStartup(SignInStart.Unavailable);
+        Assert.Null(await StartAtSignIn.ApplyAsync(notInstalled, true));
+        Assert.Empty(on.Asked.Concat(off.Asked).Concat(policy.Asked).Concat(notInstalled.Asked));
+        // Turned off in Windows and left unchecked: nothing to change.
+        var offInWindows = new FakeStartup(SignInStart.OffInWindows);
+        Assert.Null(await StartAtSignIn.ApplyAsync(offInWindows, false));
+        Assert.Empty(offInWindows.Asked);
+    }
+
+    [Fact]
+    public async Task Settings_TurnsTheStartupTaskOnAndOff_SayingNothingWhenWindowsAgrees()
+    {
+        var startup = new FakeStartup(SignInStart.Off);
+        Assert.Null(await StartAtSignIn.ApplyAsync(startup, true));
+        Assert.Null(await StartAtSignIn.ApplyAsync(startup, false));
+        Assert.Equal([true, false], startup.Asked);
+    }
+
+    [Fact]
+    public async Task WhenWindowsWontTurnItOn_SettingsSaysWhy_OfferingTheStartupAppsPage_OnlyWhereThePersonCanChangeIt()
+    {
+        var userTurnedOff = await StartAtSignIn.ApplyAsync(new FakeStartup(SignInStart.OffInWindows, after: SignInStart.OffInWindows), true);
+        Assert.NotNull(userTurnedOff);
+        Assert.True(userTurnedOff.OfferStartupApps);
+        Assert.Contains("startup apps", userTurnedOff.Message);
+
+        var organization = await StartAtSignIn.ApplyAsync(new FakeStartup(SignInStart.OffByPolicy, after: SignInStart.OffByPolicy), true);
+        Assert.NotNull(organization);
+        Assert.False(organization.OfferStartupApps);
+
+        var couldntTurnOff = await StartAtSignIn.ApplyAsync(new FakeStartup(SignInStart.On, after: SignInStart.On), false);
+        Assert.NotNull(couldntTurnOff);
+        Assert.True(couldntTurnOff.OfferStartupApps);
+
+        var organizationOn = await StartAtSignIn.ApplyAsync(new FakeStartup(SignInStart.OnByPolicy, after: SignInStart.OnByPolicy), false);
+        Assert.NotNull(organizationOn);
+        Assert.False(organizationOn.OfferStartupApps);
+    }
+
+    [Fact]
+    public void TheCheckBox_SaysWhenItsStateIsntThePersonsToChangeThere()
+    {
+        Assert.Equal("turned off in Windows' startup apps", StartAtSignIn.StateNote(SignInStart.OffInWindows));
+        Assert.Equal("turned off by your organization", StartAtSignIn.StateNote(SignInStart.OffByPolicy));
+        Assert.Equal("turned on by your organization", StartAtSignIn.StateNote(SignInStart.OnByPolicy));
+        Assert.Null(StartAtSignIn.StateNote(SignInStart.On));
+        Assert.Null(StartAtSignIn.StateNote(SignInStart.Off));
+        Assert.Null(StartAtSignIn.StateNote(SignInStart.Unavailable));
+    }
+
+    [Fact]
+    public void TheNotificationAreaIcon_HasOpenAndExit_WithAccessKeys_AndIsntShownUntilAsked()
+    {
+        // Never made visible here, so nothing appears in this PC's notification area.
+        using var tray = new TrayIcon(() => { }, () => { });
+        Assert.Equal(["&Open Quick Describe", "E&xit Quick Describe"], tray.MenuItems);
+        Assert.False(tray.Visible);
+    }
+
+    /// <summary>A startup task that's in a given state, and changes to what it's asked (or to <c>after</c>, for one
+    /// Windows won't change).</summary>
+    private sealed class FakeStartup(SignInStart state, SignInStart? after = null) : IStartAtSignIn
+    {
+        public List<bool> Asked { get; } = [];
+
+        public Task<SignInStart> GetAsync() => Task.FromResult(state);
+
+        public Task<SignInStart> SetAsync(bool on)
+        {
+            Asked.Add(on);
+            state = after ?? (on ? SignInStart.On : SignInStart.Off);
+            return Task.FromResult(state);
+        }
+    }
+
     private static string Repo([System.Runtime.CompilerServices.CallerFilePath] string file = "") =>
         Path.GetFullPath(Path.Combine(Path.GetDirectoryName(file)!, "..", ".."));
 }

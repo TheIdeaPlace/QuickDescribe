@@ -38,6 +38,8 @@ public partial class SettingsWindow : Window
         Kind = kind;
         SignIn = StartAtSignIn.IsOn(signIn);
         KeepRunning = keepRunning;
+        // Said in the label, as well as after OK: a screen reader reads the label with the box.
+        if (StartAtSignIn.StateNote(signIn) is { } note) SignInBox.Content = $"{SignInBox.Content} ({note})";
         if (signIn == SignInStart.Unavailable)
         {
             SignInBox.Visibility = Visibility.Collapsed;
@@ -112,7 +114,7 @@ public partial class SettingsWindow : Window
     {
         Show(HotKeyMap.Default, WindowsAI.Kinds[0].Id, false, false);
         _warnedAbout = null;
-        Announcer.Announce($"Back to the defaults. {SummaryText.Text}");
+        Announcer.Announce($"Back to the defaults. {SummaryText.Text} Starting with Windows and keeping running are off.");
     }
 
     private void Ok_Click(object sender, RoutedEventArgs e)

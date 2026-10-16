@@ -91,6 +91,32 @@ public sealed class StartAtSignIn : IStartAtSignIn
         _ => null,
     };
 
+    /// <summary>What to tell the person after Settings' choice was applied, and whether to offer Windows' Startup apps
+    /// page, where only they can turn it on (or off) again.</summary>
+    public sealed record Told(string Message, bool OfferStartupApps);
+
+    /// <summary>Turns starting at sign-in on or off as Settings chose, unless it already is (or can't be, in a copy that
+    /// isn't installed). Null when there's nothing to say.</summary>
+    public static async Task<Told?> ApplyAsync(IStartAtSignIn startup, bool wanted)
+    {
+        var now = await startup.GetAsync();
+        if (now == SignInStart.Unavailable || IsOn(now) == wanted) return null;
+        var result = await startup.SetAsync(wanted);
+        Log.Write("settings", $"Start at sign-in: asked {(wanted ? "on" : "off")}, now {result}");
+        return Outcome(wanted, result) is { } message
+            ? new Told(message, result is SignInStart.OffInWindows or SignInStart.On)
+            : null;
+    }
+
+    /// <summary>What the Settings check box adds to its label when its state isn't the person's own to change there.</summary>
+    public static string? StateNote(SignInStart state) => state switch
+    {
+        SignInStart.OffInWindows => "turned off in Windows' startup apps",
+        SignInStart.OffByPolicy => "turned off by your organization",
+        SignInStart.OnByPolicy => "turned on by your organization",
+        _ => null,
+    };
+
     /// <summary>Whether Windows started this run at sign-in, rather than the person.</summary>
     public static bool StartedBySignIn()
     {

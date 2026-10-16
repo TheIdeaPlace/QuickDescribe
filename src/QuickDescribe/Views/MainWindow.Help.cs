@@ -259,7 +259,7 @@ public partial class MainWindow
             lines.Add($"Hotkeys another app has: {string.Join(", ", _hotKeys.Unavailable.Select(_hotKeys.Map.GestureFor))}");
         var inUse = _hotKeys?.Map ?? _settings.HotKeys;
         lines.Add($"Hotkeys: {SettingsWindow.Summary(inUse)}{(inUse.AllowConflicts ? " Key combinations other apps use: allowed." : "")}");
-        lines.Add($"Start at sign-in: {await SignIn.GetAsync()}. Keep running when closed: {(_settings.KeepRunning ? "on" : "off")}.");
+        lines.Add($"Start at sign-in: {await _startup.GetAsync()}. Keep running when closed: {(_settings.KeepRunning ? "on" : "off")}.");
         return string.Join("\n", lines);
     }
 
