@@ -32,17 +32,37 @@ public class HotKeyMapTests
     [Theory]
     [InlineData(KeyModifiers.None)]
     [InlineData(KeyModifiers.Shift)]
-    public void ShiftAlone_OrNothing_IsRefused_SinceTheLettersAreForTyping(KeyModifiers modifiers)
+    [InlineData(KeyModifiers.Ctrl)]                      // Ctrl+V, Ctrl+S, Ctrl+F in every app
+    [InlineData(KeyModifiers.Alt)]                       // every menu's access keys
+    [InlineData(KeyModifiers.Ctrl | KeyModifiers.Shift)] // Save As, paste as plain text
+    [InlineData(KeyModifiers.Alt | KeyModifiers.Shift)]
+    public void KeysThatWouldTakeOtherAppsShortcuts_AreRefused(KeyModifiers modifiers)
     {
         var problem = Assert.Single(Map(modifiers).Problems());
-        Assert.StartsWith("Hold Ctrl, Alt or the Windows key", problem);
+        Assert.StartsWith("Hold at least two of Ctrl, Alt and the Windows key, or the Windows key", problem);
     }
 
     [Theory]
-    [InlineData(KeyModifiers.Ctrl | KeyModifiers.Shift)]
-    [InlineData(KeyModifiers.Alt)]
+    [InlineData(KeyModifiers.Ctrl | KeyModifiers.Alt)]
+    [InlineData(KeyModifiers.Ctrl | KeyModifiers.Alt | KeyModifiers.Shift)]
+    [InlineData(KeyModifiers.Ctrl | KeyModifiers.Windows)]
+    [InlineData(KeyModifiers.Alt | KeyModifiers.Windows)]
     [InlineData(KeyModifiers.Windows)]
-    public void AnyOfCtrlAltOrWindows_IsEnough(KeyModifiers modifiers) => Assert.Empty(Map(modifiers).Problems());
+    [InlineData(KeyModifiers.Windows | KeyModifiers.Shift)]
+    public void TwoOfCtrlAltAndWindows_OrWindows_AreAllowed(KeyModifiers modifiers) => Assert.Empty(Map(modifiers).Problems());
+
+    [Fact]
+    public void OKWarnsAboutTakenHotkeys_OnlyWhenTheyChanged_AndOnlyOnce()
+    {
+        var opened = HotKeyMap.Default;
+        var changed = Map(KeyModifiers.Ctrl | KeyModifiers.Alt, screen: 'Q');
+        Assert.False(SettingsWindow.ShouldWarn(opened, changed, [], null));                       // nothing taken
+        Assert.True(SettingsWindow.ShouldWarn(opened, changed, [Target.Screen], null));           // taken: said
+        Assert.False(SettingsWindow.ShouldWarn(opened, changed, [Target.Screen], changed));       // OK again keeps them
+        Assert.True(SettingsWindow.ShouldWarn(opened, Map(KeyModifiers.Ctrl | KeyModifiers.Alt, screen: 'Z'), [Target.Screen], changed));
+        // The hotkeys weren't touched (only the description type was): said at the start, not again.
+        Assert.False(SettingsWindow.ShouldWarn(opened, opened, [Target.Window], null));
+    }
 
     [Fact]
     public void TheSameLetterTwice_IsRefused_NamingBoth()
@@ -59,7 +79,7 @@ public class HotKeyMapTests
         Assert.Null(map.GestureFor(Target.Window));
         Assert.Equal("Screen, Ctrl+Alt+S. Focused item, Ctrl+Alt+F.", SettingsWindow.Summary(map));
         Assert.Equal("No hotkeys: the Describe and File menus still do everything.",
-            SettingsWindow.Summary(Map(KeyModifiers.Ctrl, null, null, null, null)));
+            SettingsWindow.Summary(Map(KeyModifiers.Ctrl | KeyModifiers.Alt, null, null, null, null)));
     }
 
     [Fact]
@@ -87,10 +107,13 @@ public class HotKeyMapTests
         Assert.True(new Settings().HotKeys.SameAs(HotKeyMap.Default));
         // Shift alone, written by hand or by an older version: the defaults, rather than taking letters from typing.
         Assert.True(HotKeyMap.FromSettings((int)KeyModifiers.Shift, new Dictionary<string, string> { ["Screen"] = "S" }).SameAs(HotKeyMap.Default));
-        Assert.True(HotKeyMap.FromSettings((int)KeyModifiers.Ctrl, new Dictionary<string, string> { ["Screen"] = "S", ["Focus"] = "s" }).SameAs(HotKeyMap.Default));
+        const int ctrlAlt = (int)(KeyModifiers.Ctrl | KeyModifiers.Alt);
+        Assert.True(HotKeyMap.FromSettings(ctrlAlt, new Dictionary<string, string> { ["Screen"] = "S", ["Focus"] = "s" }).SameAs(HotKeyMap.Default));
+        // Ctrl alone, allowed by an earlier build: the defaults, rather than taking Ctrl+V from every app.
+        Assert.True(HotKeyMap.FromSettings((int)KeyModifiers.Ctrl, new Dictionary<string, string> { ["Screen"] = "Q" }).SameAs(HotKeyMap.Default));
         // A letter typed in lower case is the same letter; something that isn't a letter is refused.
-        Assert.Equal("Ctrl+Q", HotKeyMap.FromSettings((int)KeyModifiers.Ctrl, new Dictionary<string, string> { ["Screen"] = "q" }).GestureFor(Target.Screen));
-        Assert.True(HotKeyMap.FromSettings((int)KeyModifiers.Ctrl, new Dictionary<string, string> { ["Screen"] = "7" }).SameAs(HotKeyMap.Default));
+        Assert.Equal("Ctrl+Alt+Q", HotKeyMap.FromSettings(ctrlAlt, new Dictionary<string, string> { ["Screen"] = "q" }).GestureFor(Target.Screen));
+        Assert.True(HotKeyMap.FromSettings(ctrlAlt, new Dictionary<string, string> { ["Screen"] = "7" }).SameAs(HotKeyMap.Default));
     }
 
     [Fact]
@@ -100,7 +123,7 @@ public class HotKeyMapTests
         Assert.StartsWith("From any app, press Ctrl+Windows with:" + Environment.NewLine + "Q to describe the screen,", text);
         Assert.Contains("File, Settings sets the others.", text);
         Assert.DoesNotContain("clipboard.", text.Split(Environment.NewLine + Environment.NewLine)[0]);
-        Assert.StartsWith("No hotkeys are set", MainWindow.Welcome(Map(KeyModifiers.Ctrl, null, null, null, null)));
+        Assert.StartsWith("No hotkeys are set", MainWindow.Welcome(Map(KeyModifiers.Ctrl | KeyModifiers.Alt, null, null, null, null)));
     }
 
     [Fact]

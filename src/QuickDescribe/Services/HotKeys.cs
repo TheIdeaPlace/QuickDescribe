@@ -62,9 +62,9 @@ public sealed record HotKeyMap(KeyModifiers Modifiers, IReadOnlyDictionary<Targe
     public IReadOnlyList<string> Problems()
     {
         var problems = new List<string>();
-        // Shift alone (or nothing) would take letters away from typing in every app.
-        if ((Modifiers & (KeyModifiers.Ctrl | KeyModifiers.Alt | KeyModifiers.Windows)) == 0)
-            problems.Add("Hold Ctrl, Alt or the Windows key with the letters: with Shift alone, or nothing, they'd stop working for typing.");
+        if (!ModifiersAreSafe(Modifiers))
+            problems.Add("Hold at least two of Ctrl, Alt and the Windows key, or the Windows key: with Ctrl or Alt alone (with or without Shift), " +
+                         "or Shift alone, the hotkeys would take keys like Ctrl+V, Ctrl+S and menus' Alt keys away from every app.");
         foreach (var letter in Letters.Values.OfType<char>())
             if (letter is not (>= 'A' and <= 'Z'))
                 problems.Add($"{letter} isn't a letter from A to Z.");
@@ -73,18 +73,41 @@ public sealed record HotKeyMap(KeyModifiers Modifiers, IReadOnlyDictionary<Targe
         return problems;
     }
 
+    /// <summary>
+    /// Whether hotkeys held with these keys leave other apps' shortcuts alone. A global hotkey wins over every app's own
+    /// keys, so Ctrl alone would take Paste, Save and Find, Alt alone the menus' access keys, Ctrl+Shift Save As and the
+    /// like. Two of Ctrl, Alt and Windows, or Windows (which Windows keeps for itself, so it reserves its own), are safe.
+    /// </summary>
+    public static bool ModifiersAreSafe(KeyModifiers modifiers)
+    {
+        if (modifiers.HasFlag(KeyModifiers.Windows)) return true;
+        return modifiers.HasFlag(KeyModifiers.Ctrl) && modifiers.HasFlag(KeyModifiers.Alt);
+    }
+
     /// <summary>This map as kept in settings.</summary>
     public (int Modifiers, Dictionary<string, string> Letters) ToSettings() =>
         ((int)Modifiers, Targets.ToDictionary(t => t.ToString(), t => LetterFor(t)?.ToString() ?? ""));
 
-    /// <summary>The map kept in settings, or the default when there's none or it can't be used.</summary>
+    /// <summary>The map kept in settings, or the default when there's none or it can't be used (logged, so a choice
+    /// that stopped being allowed doesn't vanish without a word).</summary>
     public static HotKeyMap FromSettings(int? modifiers, IReadOnlyDictionary<string, string>? letters)
     {
-        if (modifiers is null || letters is null) return Default;
-        var map = new HotKeyMap((KeyModifiers)modifiers.Value & (KeyModifiers.Alt | KeyModifiers.Ctrl | KeyModifiers.Shift | KeyModifiers.Windows),
+        var map = Read(modifiers, letters);
+        if (map is null) return Default;
+        if (map.Problems() is { Count: > 0 } problems)
+        {
+            Log.Write("settings", $"The saved hotkeys can't be used, so the defaults are: {string.Join(" ", problems)}");
+            return Default;
+        }
+        return map;
+    }
+
+    private static HotKeyMap? Read(int? modifiers, IReadOnlyDictionary<string, string>? letters)
+    {
+        if (modifiers is null || letters is null) return null;
+        return new HotKeyMap((KeyModifiers)modifiers.Value & (KeyModifiers.Alt | KeyModifiers.Ctrl | KeyModifiers.Shift | KeyModifiers.Windows),
             Targets.ToDictionary(t => t, t => letters.TryGetValue(t.ToString(), out var l) && l.Trim() is { Length: 1 } one
                 ? char.ToUpperInvariant(one[0]) : (char?)null));
-        return map.Problems().Count == 0 ? map : Default;
     }
 
     /// <summary>"A, B and C".</summary>

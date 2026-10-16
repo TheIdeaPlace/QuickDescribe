@@ -14,7 +14,7 @@
                 <MenuItem x:Name="OpenItem" Header="_Open Picture…" InputGestureText="Ctrl+O" Click="OnOpen" />
                 <MenuItem x:Name="ClipboardItem" Header="Describe _Clipboard" Click="OnClipboard" />
                 <Separator />
-                <MenuItem Header="_Settings…" InputGestureText="Ctrl+," Click="OnSettings" />
+                <MenuItem Header="_Settings…" InputGestureText="Ctrl+Comma" Click="OnSettings" />
                 <Separator />
                 <MenuItem Header="E_xit" InputGestureText="Alt+F4" Click="OnExit" />
             </MenuItem>

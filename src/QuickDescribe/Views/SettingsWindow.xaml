@@ -8,15 +8,16 @@
     <StackPanel Margin="14">
         <GroupBox Header="Hotkeys, from any app" Padding="8">
             <StackPanel>
-                <TextBlock x:Name="HoldText" Text="Hold these with each letter:" Margin="0,0,0,4" />
-                <!-- A group of their own, named by the line above. -->
-                <StackPanel x:Name="ModifierPanel" Orientation="Horizontal" Margin="0,0,0,10"
-                            AutomationProperties.LabeledBy="{Binding ElementName=HoldText}">
+                <!-- A group of their own, so screen readers say "Hold with each letter" with the boxes (a panel has no
+                     automation element to carry a name). -->
+                <GroupBox Header="Hold with each letter" Padding="6,4" Margin="0,0,0,10">
+                <StackPanel x:Name="ModifierPanel" Orientation="Horizontal">
                     <CheckBox x:Name="CtrlBox" Content="_Ctrl" Margin="0,0,16,0" Click="Changed" />
                     <CheckBox x:Name="AltBox" Content="_Alt" Margin="0,0,16,0" Click="Changed" />
                     <CheckBox x:Name="ShiftBox" Content="S_hift" Margin="0,0,16,0" Click="Changed" />
                     <CheckBox x:Name="WindowsBox" Content="_Windows key" Click="Changed" />
                 </StackPanel>
+                </GroupBox>
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />

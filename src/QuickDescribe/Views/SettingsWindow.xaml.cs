@@ -15,7 +15,11 @@ public partial class SettingsWindow : Window
     public const string NoneItem = "None";
 
     private readonly Func<HotKeyMap, IReadOnlyList<Target>> _apply;
+    private readonly HotKeyMap _opened;
     private HotKeyMap? _warnedAbout;
+
+    /// <summary>The control a message last went to, as its help text: cleared when anything changes.</summary>
+    private Control? _toldOn;
 
     /// <summary>The choices, once OK has been pressed and they've been applied.</summary>
     public HotKeyMap Map { get; private set; }
@@ -26,6 +30,7 @@ public partial class SettingsWindow : Window
     {
         InitializeComponent();
         _apply = apply;
+        _opened = map;
         Map = map;
         Kind = kind;
         var letters = new[] { NoneItem }.Concat(Enumerable.Range('A', 26).Select(c => ((char)c).ToString())).ToList();
@@ -70,6 +75,8 @@ public partial class SettingsWindow : Window
     {
         if (_showing) return;
         _warnedAbout = null;
+        if (_toldOn is not null) AutomationProperties.SetHelpText(_toldOn, "");
+        _toldOn = null;
         Summarize();
     }
 
@@ -100,14 +107,14 @@ public partial class SettingsWindow : Window
         var map = Chosen();
         if (map.Problems() is { Count: > 0 } problems)
         {
-            Tell(string.Join(" ", problems), problems[0].StartsWith("Hold", StringComparison.Ordinal) ? CtrlBox : FirstDuplicate(map));
+            Tell(string.Join(" ", problems), HotKeyMap.ModifiersAreSafe(map.Modifiers) ? FirstDuplicate(map) : CtrlBox);
             return;
         }
         Kind = (string)((ComboBoxItem)KindBox.SelectedItem).Tag;
         // Tried with Windows now, so a combination another app has is said here, where it can be changed.
         var refused = _apply(map);
         Map = map;
-        if (refused.Count > 0 && (_warnedAbout is null || !_warnedAbout.SameAs(map)))
+        if (ShouldWarn(_opened, map, refused, _warnedAbout))
         {
             _warnedAbout = map;
             Tell($"{map.Refused(refused)} Choose another letter, or press OK again to keep {(refused.Count == 1 ? "it" : "them")} anyway.",
@@ -117,17 +124,26 @@ public partial class SettingsWindow : Window
         DialogResult = true;
     }
 
+    /// <summary>Whether OK says some hotkeys are taken rather than closing: only for hotkeys that changed (the ones in use
+    /// were said at the start), and only once for the same choice, so OK again keeps them.</summary>
+    internal static bool ShouldWarn(HotKeyMap opened, HotKeyMap chosen, IReadOnlyList<Target> refused, HotKeyMap? warnedAbout) =>
+        refused.Count > 0 && !chosen.SameAs(opened) && (warnedAbout is null || !warnedAbout.SameAs(chosen));
+
     private Control FirstDuplicate(HotKeyMap map) =>
         HotKeyMap.Targets.Where(t => map.LetterFor(t) is not null).GroupBy(t => map.LetterFor(t)).FirstOrDefault(g => g.Count() > 1) is { } same
             ? KeyFor(same.Last())
             : CtrlBox;
 
-    /// <summary>Says what's wrong and puts focus where it can be fixed.</summary>
+    /// <summary>Says what's wrong and puts focus where it can be fixed. The message is that control's help text, so the
+    /// screen reader says it with the control rather than an announcement being cut off by the move (as in Report a Bug).</summary>
     private void Tell(string message, Control fix)
     {
         SummaryText.Text = message;
         AutomationProperties.SetHelpText(OkButton, message);
-        fix.Focus();
-        Announcer.Announce(message);
+        if (_toldOn is not null) AutomationProperties.SetHelpText(_toldOn, "");
+        AutomationProperties.SetHelpText(fix, message);
+        _toldOn = fix;
+        if (fix.IsKeyboardFocused) Announcer.Announce(message); // no move to say it with
+        else fix.Focus();
     }
 }
