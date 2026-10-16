@@ -250,7 +250,7 @@ public partial class MainWindow : Window
         "Describe, Description Type chooses Accessible, Detailed, Brief or Diagram descriptions. " +
         "You can also open a picture file (Ctrl+O) or drop one on this window. " +
         "Pictures are described with Windows' on-device AI on Copilot+ PCs, and their text read with Windows' text recognition. " +
-        "File, Settings chooses the hotkeys. Pictures never leave this PC.";
+        "File, Settings chooses the hotkeys, and whether Quick Describe starts with Windows. Pictures never leave this PC.";
     }
 
     // ---- Describing ----
