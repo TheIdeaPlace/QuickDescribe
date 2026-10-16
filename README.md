@@ -57,7 +57,7 @@ If another app already uses one of the hotkeys, Quick Describe says which when i
 
 **File, Settings** (Ctrl+Comma) chooses:
 
-- **The keys held with every hotkey:** Ctrl, Alt, Shift and the Windows key, as check boxes. Hold at least two of Ctrl, Alt and the Windows key, or the Windows key: with Ctrl or Alt alone, a hotkey would take that key from every app (Ctrl+V would stop pasting anywhere). On many keyboards outside the US, Ctrl+Alt is AltGr, which types accented letters; if a hotkey gets in the way of one, choose another letter, or hold the Windows key instead.
+- **The keys held with every hotkey:** Ctrl, Alt, Shift and the Windows key, as check boxes. Hold at least two of Ctrl, Alt and the Windows key, or the Windows key: with Ctrl or Alt alone, a hotkey would take that key from every app (Ctrl+V would stop pasting anywhere). To use Ctrl+Shift, or Ctrl or Alt alone, anyway, check **Allow key combinations other apps use**, which is off unless you choose it; while Quick Describe runs, those keys then describe instead of doing what they do in other apps (Ctrl+Shift+S would describe instead of Save As). Shift alone is never allowed, since the letters would stop typing. On many keyboards outside the US, Ctrl+Alt is AltGr, which types accented letters; if a hotkey gets in the way of one, choose another letter, or hold the Windows key instead.
 - **A letter for each command:** Screen, Active window, Focused item and Clipboard picture, from A to Z, or None to turn that hotkey off. Each needs its own letter.
 - **The description type:** Accessible, Detailed, Brief or Diagram, as in the Describe menu.
 

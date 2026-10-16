@@ -18,6 +18,10 @@
                     <CheckBox x:Name="WindowsBox" Content="_Windows key" Click="Changed" />
                 </StackPanel>
                 </GroupBox>
+                <!-- Off unless chosen: with it, Ctrl+Shift, Ctrl alone and Alt alone are allowed, at the cost of those keys in
+                     other apps while Quick Describe runs. Shift alone stays refused. -->
+                <CheckBox x:Name="ConflictsBox" Content="All_ow key combinations other apps use, such as Ctrl+Shift" Margin="0,0,0,10" Click="Changed"
+                          AutomationProperties.HelpText="While Quick Describe runs, a hotkey replaces that key in every app: with Ctrl+Shift, Ctrl+Shift+S would describe instead of Save As." />
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />

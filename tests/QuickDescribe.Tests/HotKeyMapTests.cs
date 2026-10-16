@@ -30,8 +30,6 @@ public class HotKeyMapTests
     }
 
     [Theory]
-    [InlineData(KeyModifiers.None)]
-    [InlineData(KeyModifiers.Shift)]
     [InlineData(KeyModifiers.Ctrl)]                      // Ctrl+V, Ctrl+S, Ctrl+F in every app
     [InlineData(KeyModifiers.Alt)]                       // every menu's access keys
     [InlineData(KeyModifiers.Ctrl | KeyModifiers.Shift)] // Save As, paste as plain text
@@ -40,6 +38,33 @@ public class HotKeyMapTests
     {
         var problem = Assert.Single(Map(modifiers).Problems());
         Assert.StartsWith("Hold at least two of Ctrl, Alt and the Windows key, or the Windows key", problem);
+    }
+
+    [Theory]
+    [InlineData(KeyModifiers.Ctrl)]
+    [InlineData(KeyModifiers.Alt)]
+    [InlineData(KeyModifiers.Ctrl | KeyModifiers.Shift)]
+    [InlineData(KeyModifiers.Alt | KeyModifiers.Shift)]
+    public void AllowingConflicts_LetsCtrlOrAltAlone_AndCtrlShift_Through(KeyModifiers modifiers) =>
+        Assert.Empty((Map(modifiers) with { AllowConflicts = true }).Problems());
+
+    [Theory]
+    [InlineData(KeyModifiers.None)]
+    [InlineData(KeyModifiers.Shift)]
+    public void ShiftAlone_IsRefused_EvenWhenConflictsAreAllowed(KeyModifiers modifiers)
+    {
+        var problem = Assert.Single((Map(modifiers) with { AllowConflicts = true }).Problems());
+        Assert.StartsWith("Hold Ctrl, Alt or the Windows key with the letters", problem);
+    }
+
+    [Fact]
+    public void AllowingConflicts_IsKept_AndLetsASavedCtrlShiftChoiceStand()
+    {
+        var settings = new Settings { HotKeys = Map(KeyModifiers.Ctrl | KeyModifiers.Shift, screen: 'Q') with { AllowConflicts = true } };
+        Assert.True(settings.HotKeysAllowConflicts);
+        Assert.Equal("Ctrl+Shift+Q", settings.HotKeys.GestureFor(Target.Screen));
+        settings.HotKeysAllowConflicts = false;
+        Assert.True(settings.HotKeys.SameAs(HotKeyMap.Default));
     }
 
     [Theory]

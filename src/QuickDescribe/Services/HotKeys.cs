@@ -27,7 +27,7 @@ public enum KeyModifiers
 /// hotkey off). Kept in settings and chosen in Settings. The default, Ctrl+Alt+Shift, leaves the keys JAWS, NVDA and
 /// Narrator use (Insert, Caps Lock, Windows) alone.
 /// </summary>
-public sealed record HotKeyMap(KeyModifiers Modifiers, IReadOnlyDictionary<Target, char?> Letters)
+public sealed record HotKeyMap(KeyModifiers Modifiers, IReadOnlyDictionary<Target, char?> Letters, bool AllowConflicts = false)
 {
     public static readonly HotKeyMap Default = new(KeyModifiers.Ctrl | KeyModifiers.Alt | KeyModifiers.Shift,
         new Dictionary<Target, char?> { [Target.Screen] = 'S', [Target.Window] = 'W', [Target.Focus] = 'F', [Target.Clipboard] = 'V' });
@@ -62,9 +62,13 @@ public sealed record HotKeyMap(KeyModifiers Modifiers, IReadOnlyDictionary<Targe
     public IReadOnlyList<string> Problems()
     {
         var problems = new List<string>();
-        if (!ModifiersAreSafe(Modifiers))
+        // Shift alone, or nothing, is refused even when conflicts are allowed: the letters would stop typing anywhere.
+        if ((Modifiers & (KeyModifiers.Ctrl | KeyModifiers.Alt | KeyModifiers.Windows)) == 0)
+            problems.Add("Hold Ctrl, Alt or the Windows key with the letters: with Shift alone, or nothing, they'd stop working for typing.");
+        else if (!AllowConflicts && !ModifiersAreSafe(Modifiers))
             problems.Add("Hold at least two of Ctrl, Alt and the Windows key, or the Windows key: with Ctrl or Alt alone (with or without Shift), " +
-                         "or Shift alone, the hotkeys would take keys like Ctrl+V, Ctrl+S and menus' Alt keys away from every app.");
+                         "the hotkeys would take keys like Ctrl+V, Ctrl+S and menus' Alt keys away from every app. To use them anyway, check " +
+                         "Allow key combinations other apps use.");
         foreach (var letter in Letters.Values.OfType<char>())
             if (letter is not (>= 'A' and <= 'Z'))
                 problems.Add($"{letter} isn't a letter from A to Z.");
@@ -85,14 +89,14 @@ public sealed record HotKeyMap(KeyModifiers Modifiers, IReadOnlyDictionary<Targe
     }
 
     /// <summary>This map as kept in settings.</summary>
-    public (int Modifiers, Dictionary<string, string> Letters) ToSettings() =>
-        ((int)Modifiers, Targets.ToDictionary(t => t.ToString(), t => LetterFor(t)?.ToString() ?? ""));
+    public (int Modifiers, Dictionary<string, string> Letters, bool AllowConflicts) ToSettings() =>
+        ((int)Modifiers, Targets.ToDictionary(t => t.ToString(), t => LetterFor(t)?.ToString() ?? ""), AllowConflicts);
 
     /// <summary>The map kept in settings, or the default when there's none or it can't be used (logged, so a choice
     /// that stopped being allowed doesn't vanish without a word).</summary>
-    public static HotKeyMap FromSettings(int? modifiers, IReadOnlyDictionary<string, string>? letters)
+    public static HotKeyMap FromSettings(int? modifiers, IReadOnlyDictionary<string, string>? letters, bool allowConflicts = false)
     {
-        var map = Read(modifiers, letters);
+        var map = Read(modifiers, letters) is { } read ? read with { AllowConflicts = allowConflicts } : null;
         if (map is null) return Default;
         if (map.Problems() is { Count: > 0 } problems)
         {
