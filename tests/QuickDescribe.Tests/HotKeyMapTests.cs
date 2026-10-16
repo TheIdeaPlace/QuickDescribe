@@ -30,6 +30,26 @@ public class HotKeyMapTests
     }
 
     [Theory]
+    [InlineData(KeyModifiers.None)]
+    [InlineData(KeyModifiers.Shift)]
+    public void ShiftAlone_OrNothing_IsRefused(KeyModifiers modifiers) =>
+        Assert.StartsWith("Hold Ctrl, Alt or the Windows key with the letters", Assert.Single(Map(modifiers).Problems()));
+
+    [Fact]
+    public void KeysOtherAppsUse_AreNamedWithWhatTheyCost_BeforeTheyreKept()
+    {
+        Assert.Null(HotKeyMap.Default.ConflictWarning());
+        var ctrlShift = Map(KeyModifiers.Ctrl | KeyModifiers.Shift, window: null, focus: null, clipboard: null) with { AllowConflicts = true };
+        Assert.Equal("While Quick Describe runs, Ctrl+Shift+S will describe in every app, instead of what those keys do there " +
+                     "(Ctrl+Shift+S is Save As, and Ctrl+Shift+V pastes as plain text, in many apps). Use them anyway?", ctrlShift.ConflictWarning());
+        // Alt alone with F, D, E or H also takes Quick Describe's own menus.
+        Assert.Contains("Quick Describe's own menus too", (Map(KeyModifiers.Alt) with { AllowConflicts = true }).ConflictWarning());
+        Assert.DoesNotContain("own menus", (Map(KeyModifiers.Alt, 'Q', 'Z', 'X', 'Y') with { AllowConflicts = true }).ConflictWarning());
+        // No hotkeys at all: nothing to warn about.
+        Assert.Null(Map(KeyModifiers.Ctrl, null, null, null, null).ConflictWarning());
+    }
+
+    [Theory]
     [InlineData(KeyModifiers.Ctrl)]                      // Ctrl+V, Ctrl+S, Ctrl+F in every app
     [InlineData(KeyModifiers.Alt)]                       // every menu's access keys
     [InlineData(KeyModifiers.Ctrl | KeyModifiers.Shift)] // Save As, paste as plain text

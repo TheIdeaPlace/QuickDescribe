@@ -88,6 +88,28 @@ public sealed record HotKeyMap(KeyModifiers Modifiers, IReadOnlyDictionary<Targe
         return modifiers.HasFlag(KeyModifiers.Ctrl) && modifiers.HasFlag(KeyModifiers.Alt);
     }
 
+    /// <summary>
+    /// What choosing keys other apps use costs, for the person to confirm: null when the keys are safe. Said in a message
+    /// box rather than only the check box's help text, which JAWS doesn't read.
+    /// </summary>
+    public string? ConflictWarning()
+    {
+        if (ModifiersAreSafe(Modifiers)) return null;
+        var gestures = Joined(Targets.Select(GestureFor));
+        if (gestures.Length == 0) return null;
+        var example = Modifiers switch
+        {
+            KeyModifiers.Ctrl => " (Ctrl+V is Paste, Ctrl+S Save and Ctrl+F Find in most apps)",
+            KeyModifiers.Ctrl | KeyModifiers.Shift => " (Ctrl+Shift+S is Save As, and Ctrl+Shift+V pastes as plain text, in many apps)",
+            KeyModifiers.Alt => " (Alt with a letter opens menus in most apps)",
+            _ => "",
+        };
+        var own = Modifiers == KeyModifiers.Alt && Targets.Any(t => LetterFor(t) is 'F' or 'D' or 'E' or 'H')
+            ? $" {AppInfo.Name}'s own menus too: Alt+F, Alt+D, Alt+E and Alt+H would describe instead of opening File, Describe, Edit and Help, and Ctrl+Comma still opens Settings."
+            : "";
+        return $"While {AppInfo.Name} runs, {gestures} will describe in every app, instead of what those keys do there{example}.{own} Use them anyway?";
+    }
+
     /// <summary>This map as kept in settings.</summary>
     public (int Modifiers, Dictionary<string, string> Letters, bool AllowConflicts) ToSettings() =>
         ((int)Modifiers, Targets.ToDictionary(t => t.ToString(), t => LetterFor(t)?.ToString() ?? ""), AllowConflicts);

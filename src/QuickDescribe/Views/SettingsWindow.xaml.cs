@@ -111,6 +111,13 @@ public partial class SettingsWindow : Window
             Tell(string.Join(" ", problems), map.Problems().Any(p => p.StartsWith("Hold", StringComparison.Ordinal)) ? CtrlBox : FirstDuplicate(map));
             return;
         }
+        // Keys other apps use, chosen with the check box: said plainly and confirmed, unless they're the ones already in use.
+        if (map.ConflictWarning() is { } cost && !(map.SameAs(_opened) && _opened.AllowConflicts) && Confirm?.Invoke(this, cost) == false)
+        {
+            Log.Write("settings", "Keys other apps use: not confirmed");
+            CtrlBox.Focus();
+            return;
+        }
         Kind = (string)((ComboBoxItem)KindBox.SelectedItem).Tag;
         // Tried with Windows now, so a combination another app has is said here, where it can be changed.
         var refused = _apply(map);
@@ -153,6 +160,10 @@ public partial class SettingsWindow : Window
         Problem?.Invoke(this, message);
         fix.Focus();
     }
+
+    /// <summary>Asks to confirm keys other apps use; true for Yes. Replaceable in tests.</summary>
+    internal static Func<Window, string, bool>? Confirm { get; set; } =
+        (owner, message) => MessageBox.Show(owner, message, "Settings", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) == MessageBoxResult.Yes;
 
     /// <summary>Shows why OK didn't close; replaceable in tests.</summary>
     internal static Action<Window, string>? Problem { get; set; } =
