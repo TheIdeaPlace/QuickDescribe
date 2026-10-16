@@ -13,12 +13,15 @@ public sealed class Settings
     public int? HotKeyModifiers { get; set; }
     public Dictionary<string, string>? HotKeyLetters { get; set; }
 
+    /// <summary>Settings' "Allow key combinations other apps use" (Ctrl+Shift, Ctrl or Alt alone): off unless chosen.</summary>
+    public bool HotKeysAllowConflicts { get; set; }
+
     /// <summary>The hotkeys to use: the ones chosen, or the defaults when none were or they can't be used.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
     public HotKeyMap HotKeys
     {
-        get => HotKeyMap.FromSettings(HotKeyModifiers, HotKeyLetters);
-        set => (HotKeyModifiers, HotKeyLetters) = value.ToSettings();
+        get => HotKeyMap.FromSettings(HotKeyModifiers, HotKeyLetters, HotKeysAllowConflicts);
+        set => (HotKeyModifiers, HotKeyLetters, HotKeysAllowConflicts) = value.ToSettings();
     }
 
     /// <summary>When updates were last looked for, so the quiet check runs at most once a day.</summary>

@@ -27,7 +27,7 @@ public enum KeyModifiers
 /// hotkey off). Kept in settings and chosen in Settings. The default, Ctrl+Alt+Shift, leaves the keys JAWS, NVDA and
 /// Narrator use (Insert, Caps Lock, Windows) alone.
 /// </summary>
-public sealed record HotKeyMap(KeyModifiers Modifiers, IReadOnlyDictionary<Target, char?> Letters)
+public sealed record HotKeyMap(KeyModifiers Modifiers, IReadOnlyDictionary<Target, char?> Letters, bool AllowConflicts = false)
 {
     public static readonly HotKeyMap Default = new(KeyModifiers.Ctrl | KeyModifiers.Alt | KeyModifiers.Shift,
         new Dictionary<Target, char?> { [Target.Screen] = 'S', [Target.Window] = 'W', [Target.Focus] = 'F', [Target.Clipboard] = 'V' });
@@ -62,9 +62,13 @@ public sealed record HotKeyMap(KeyModifiers Modifiers, IReadOnlyDictionary<Targe
     public IReadOnlyList<string> Problems()
     {
         var problems = new List<string>();
-        if (!ModifiersAreSafe(Modifiers))
+        // Shift alone, or nothing, is refused even when conflicts are allowed: the letters would stop typing anywhere.
+        if ((Modifiers & (KeyModifiers.Ctrl | KeyModifiers.Alt | KeyModifiers.Windows)) == 0)
+            problems.Add("Hold Ctrl, Alt or the Windows key with the letters: with Shift alone, or nothing, they'd stop working for typing.");
+        else if (!AllowConflicts && !ModifiersAreSafe(Modifiers))
             problems.Add("Hold at least two of Ctrl, Alt and the Windows key, or the Windows key: with Ctrl or Alt alone (with or without Shift), " +
-                         "or Shift alone, the hotkeys would take keys like Ctrl+V, Ctrl+S and menus' Alt keys away from every app.");
+                         "the hotkeys would take keys like Ctrl+V, Ctrl+S and menus' Alt keys away from every app. To use them anyway, check " +
+                         "Allow key combinations other apps use.");
         foreach (var letter in Letters.Values.OfType<char>())
             if (letter is not (>= 'A' and <= 'Z'))
                 problems.Add($"{letter} isn't a letter from A to Z.");
@@ -84,15 +88,37 @@ public sealed record HotKeyMap(KeyModifiers Modifiers, IReadOnlyDictionary<Targe
         return modifiers.HasFlag(KeyModifiers.Ctrl) && modifiers.HasFlag(KeyModifiers.Alt);
     }
 
+    /// <summary>
+    /// What choosing keys other apps use costs, for the person to confirm: null when the keys are safe. Said in a message
+    /// box rather than only the check box's help text, which JAWS doesn't read.
+    /// </summary>
+    public string? ConflictWarning()
+    {
+        if (ModifiersAreSafe(Modifiers)) return null;
+        var gestures = Joined(Targets.Select(GestureFor));
+        if (gestures.Length == 0) return null;
+        var example = Modifiers switch
+        {
+            KeyModifiers.Ctrl => " (Ctrl+V is Paste, Ctrl+S Save and Ctrl+F Find in most apps)",
+            KeyModifiers.Ctrl | KeyModifiers.Shift => " (Ctrl+Shift+S is Save As, and Ctrl+Shift+V pastes as plain text, in many apps)",
+            KeyModifiers.Alt => " (Alt with a letter opens menus in most apps)",
+            _ => "",
+        };
+        var own = Modifiers == KeyModifiers.Alt && Targets.Any(t => LetterFor(t) is 'F' or 'D' or 'E' or 'H')
+            ? $" {AppInfo.Name}'s own menus too: Alt+F, Alt+D, Alt+E and Alt+H would describe instead of opening File, Describe, Edit and Help, and Ctrl+Comma still opens Settings."
+            : "";
+        return $"While {AppInfo.Name} runs, {gestures} will describe in every app, instead of what those keys do there{example}.{own} Use them anyway?";
+    }
+
     /// <summary>This map as kept in settings.</summary>
-    public (int Modifiers, Dictionary<string, string> Letters) ToSettings() =>
-        ((int)Modifiers, Targets.ToDictionary(t => t.ToString(), t => LetterFor(t)?.ToString() ?? ""));
+    public (int Modifiers, Dictionary<string, string> Letters, bool AllowConflicts) ToSettings() =>
+        ((int)Modifiers, Targets.ToDictionary(t => t.ToString(), t => LetterFor(t)?.ToString() ?? ""), AllowConflicts);
 
     /// <summary>The map kept in settings, or the default when there's none or it can't be used (logged, so a choice
     /// that stopped being allowed doesn't vanish without a word).</summary>
-    public static HotKeyMap FromSettings(int? modifiers, IReadOnlyDictionary<string, string>? letters)
+    public static HotKeyMap FromSettings(int? modifiers, IReadOnlyDictionary<string, string>? letters, bool allowConflicts = false)
     {
-        var map = Read(modifiers, letters);
+        var map = Read(modifiers, letters) is { } read ? read with { AllowConflicts = allowConflicts } : null;
         if (map is null) return Default;
         if (map.Problems() is { Count: > 0 } problems)
         {

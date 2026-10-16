@@ -53,6 +53,7 @@ public partial class SettingsWindow : Window
         AltBox.IsChecked = map.Modifiers.HasFlag(KeyModifiers.Alt);
         ShiftBox.IsChecked = map.Modifiers.HasFlag(KeyModifiers.Shift);
         WindowsBox.IsChecked = map.Modifiers.HasFlag(KeyModifiers.Windows);
+        ConflictsBox.IsChecked = map.AllowConflicts;
         foreach (var target in HotKeyMap.Targets) KeyFor(target).SelectedItem = map.LetterFor(target)?.ToString() ?? NoneItem;
         KindBox.SelectedItem = KindBox.Items.OfType<ComboBoxItem>().FirstOrDefault(i => (string)i.Tag == kind) ?? KindBox.Items[0];
         _showing = false;
@@ -68,7 +69,7 @@ public partial class SettingsWindow : Window
         if (ShiftBox.IsChecked == true) modifiers |= KeyModifiers.Shift;
         if (WindowsBox.IsChecked == true) modifiers |= KeyModifiers.Windows;
         return new HotKeyMap(modifiers, HotKeyMap.Targets.ToDictionary(t => t,
-            t => KeyFor(t).SelectedItem is string s && s != NoneItem ? s[0] : (char?)null));
+            t => KeyFor(t).SelectedItem is string s && s != NoneItem ? s[0] : (char?)null), ConflictsBox.IsChecked == true);
     }
 
     private void Changed(object sender, RoutedEventArgs e)
@@ -107,7 +108,14 @@ public partial class SettingsWindow : Window
         var map = Chosen();
         if (map.Problems() is { Count: > 0 } problems)
         {
-            Tell(string.Join(" ", problems), HotKeyMap.ModifiersAreSafe(map.Modifiers) ? FirstDuplicate(map) : CtrlBox);
+            Tell(string.Join(" ", problems), map.Problems().Any(p => p.StartsWith("Hold", StringComparison.Ordinal)) ? CtrlBox : FirstDuplicate(map));
+            return;
+        }
+        // Keys other apps use, chosen with the check box: said plainly and confirmed, unless they're the ones already in use.
+        if (map.ConflictWarning() is { } cost && !(map.SameAs(_opened) && _opened.AllowConflicts) && Confirm?.Invoke(this, cost) == false)
+        {
+            Log.Write("settings", "Keys other apps use: not confirmed");
+            CtrlBox.Focus();
             return;
         }
         Kind = (string)((ComboBoxItem)KindBox.SelectedItem).Tag;
@@ -152,6 +160,10 @@ public partial class SettingsWindow : Window
         Problem?.Invoke(this, message);
         fix.Focus();
     }
+
+    /// <summary>Asks to confirm keys other apps use; true for Yes. Replaceable in tests.</summary>
+    internal static Func<Window, string, bool>? Confirm { get; set; } =
+        (owner, message) => MessageBox.Show(owner, message, "Settings", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) == MessageBoxResult.Yes;
 
     /// <summary>Shows why OK didn't close; replaceable in tests.</summary>
     internal static Action<Window, string>? Problem { get; set; } =
