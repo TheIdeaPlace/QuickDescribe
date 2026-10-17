@@ -59,7 +59,17 @@ public sealed class WindowsAI : IDisposable
     private IHelperConnection? _server;
     private int _nextId;
 
-    public WindowsAI() : this(StartServer, TimeSpan.FromMinutes(3))
+    /// <summary>How many requests Windows didn't answer in time, so a request that waited behind one gives up at once.</summary>
+    private int _timeouts;
+
+    /// <summary>Why a request timed out. Windows AI has stopped answering anything on Kelly's PC (17 Oct 2026, after its
+    /// AI components updated) while still reporting itself ready, until the PC was restarted.</summary>
+    internal const string NotRespondingMessage =
+        "Windows' AI didn't answer. If this keeps happening, restarting the PC may help.";
+
+    /// <summary>A description takes about 3 seconds, and the first in a session 6 to 18 (measured 15 Oct 2026), so a
+    /// minute and a half is a helper that has stopped answering.</summary>
+    public WindowsAI() : this(StartServer, TimeSpan.FromSeconds(90))
     {
     }
 
@@ -101,8 +111,9 @@ public sealed class WindowsAI : IDisposable
 
     private static (AIReadiness Readiness, DateTime At)? _checked;
 
-    /// <summary>Whether the model can be used, from the helper's --check, remembered so each picture doesn't start another
-    /// helper to ask (see <see cref="RecheckAfter"/>).</summary>
+    /// <summary>Whether the model can be used, from the helper's --details, remembered so each picture doesn't start another
+    /// helper to ask (see <see cref="RecheckAfter"/>). --details rather than --check for the text recognizer's state too, so
+    /// a recognizer that would download isn't asked to inside a request's time limit (see <see cref="ReadTextAsync"/>).</summary>
     public static async Task<AIReadiness> CheckAsync(CancellationToken cancel = default)
     {
         if (!IsInstalled) return new AIReadiness(false, "NotInstalled", NotInstalledMessage);
@@ -110,7 +121,7 @@ public sealed class WindowsAI : IDisposable
         AIReadiness readiness;
         try
         {
-            readiness = ParseReadiness(await RunOnceAsync("--check", CheckTimeout, cancel));
+            readiness = ParseReadiness(await RunOnceAsync("--details", CheckTimeout, cancel));
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -141,8 +152,29 @@ public sealed class WindowsAI : IDisposable
     public static async Task<AIReadiness> PrepareAsync(CancellationToken cancel = default)
     {
         var readiness = ParseReadiness(await RunOnceAsync("--prepare", PrepareTimeout, cancel));
-        _checked = (readiness, DateTime.UtcNow);
-        return readiness;
+        // Asked again for the text recognizer's state too, which --prepare doesn't report; its own message if that fails.
+        _checked = null;
+        var now = await CheckAsync(cancel);
+        return now.State == "Error" ? readiness : now;
+    }
+
+    /// <summary>Gets Windows AI's text recognizer ready, which can mean a download, by having a helper of its own read a
+    /// blank picture with <see cref="PrepareTimeout"/>: apart from the --serve helper, so describing isn't held up meanwhile,
+    /// and the reads that come meanwhile use the built-in OCR (see <see cref="ReadTextAsync"/>).</summary>
+    public static async Task<AIReadiness> PrepareTextRecognitionAsync(CancellationToken cancel = default)
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"QuickDescribe-blank-{Environment.ProcessId}.png");
+        try
+        {
+            await File.WriteAllBytesAsync(path, Blank().Png, cancel);
+            await RunOnceAsync($"--read \"{path}\"", PrepareTimeout, cancel);
+        }
+        finally
+        {
+            try { File.Delete(path); } catch (Exception) { /* left in the temp folder */ }
+        }
+        _checked = null;
+        return await CheckAsync(cancel);
     }
 
     internal static AIReadiness ParseReadiness(string? line)
@@ -188,11 +220,29 @@ public sealed class WindowsAI : IDisposable
         });
 
     /// <summary>The text in a picture, line by line, from Windows AI's text recognizer (Copilot+ PCs). Sent as PNG: JPEG's
-    /// blur around letters costs OCR more than it costs a description.</summary>
-    public async Task<IReadOnlyList<string>> ReadTextAsync(byte[] png, CancellationToken cancel = default)
+    /// blur around letters costs OCR more than it costs a description. Not sent while the recognizer is known to need
+    /// getting ready: that can be a download, longer than a request may take, so the built-in OCR reads meanwhile.</summary>
+    public Task<IReadOnlyList<string>> ReadTextAsync(byte[] png, CancellationToken cancel = default) => ReadTextAsync(png, null, cancel);
+
+    private async Task<IReadOnlyList<string>> ReadTextAsync(byte[] png, TimeSpan? limit, CancellationToken cancel)
     {
+        if (RecognizerNotReady(_checked?.Readiness))
+            throw new DescriptionException("not_ready", "Windows is still getting its text recognizer ready.");
         var id = Interlocked.Increment(ref _nextId);
-        return ParseLines(await SendAsync(BuildReadRequest(id, png), id, cancel), id);
+        return ParseLines(await SendAsync(BuildReadRequest(id, png), id, cancel, limit), id);
+    }
+
+    /// <summary>Whether a check says the text recognizer needs getting ready (nothing known: no).</summary>
+    internal static bool RecognizerNotReady(AIReadiness? readiness) =>
+        readiness is not null && readiness.Components.TryGetValue("textRecognition", out var state) && state == "NotReady";
+
+    /// <summary>A small grey picture, for warming up and getting the text recognizer ready.</summary>
+    private static (byte[] Jpeg, byte[] Png) Blank()
+    {
+        var blank = System.Windows.Media.Imaging.BitmapSource.Create(64, 64, 96, 96, System.Windows.Media.PixelFormats.Bgr32, null,
+            Enumerable.Repeat((byte)200, 64 * 64 * 4).ToArray(), 64 * 4);
+        blank.Freeze();
+        return (Pictures.Jpeg(blank, 64), Pictures.Png(blank, 64));
     }
 
     /// <summary>
@@ -200,26 +250,18 @@ public sealed class WindowsAI : IDisposable
     /// Copilot+ PC, and later ones about 3 (measured 15 Oct 2026). Describes and reads a tiny blank picture through this
     /// helper, so the helper is running and Windows has both models loaded when the first real picture comes. A request
     /// made meanwhile queues behind it, so it waits no longer than it would have for the cold load anyway. One try each,
-    /// within <see cref="WarmUpTimeout"/>: a warm-up that fails isn't retried at other sizes, as a real picture is, so it
-    /// can't hold the helper for minutes. Returns how long it took; throws when it didn't work.
+    /// each given <see cref="WarmUpTimeout"/> once it reaches the helper: a warm-up that fails isn't retried at other
+    /// sizes, as a real picture is, so it can't hold the helper for minutes, and one that isn't answered is a timeout like
+    /// any request's, so a request waiting behind it gives up at once. Returns how long it took; throws when it didn't work.
     /// </summary>
     public async Task<TimeSpan> WarmUpAsync(CancellationToken cancel = default)
     {
         var started = Stopwatch.StartNew();
-        using var limit = CancellationTokenSource.CreateLinkedTokenSource(cancel);
-        limit.CancelAfter(WarmUpTimeout);
-        cancel = limit.Token;
-        var (jpeg, png) = await Task.Run(() =>
-        {
-            var blank = System.Windows.Media.Imaging.BitmapSource.Create(64, 64, 96, 96, System.Windows.Media.PixelFormats.Bgr32, null,
-                Enumerable.Repeat((byte)200, 64 * 64 * 4).ToArray(), 64 * 4);
-            blank.Freeze();
-            return (Pictures.Jpeg(blank, 64), Pictures.Png(blank, 64));
-        }, cancel);
+        var (jpeg, png) = await Task.Run(Blank, cancel);
         try
         {
             var id = Interlocked.Increment(ref _nextId);
-            ParseResponse(await SendAsync(BuildRequest(id, "brief", jpeg), id, cancel), id);
+            ParseResponse(await SendAsync(BuildRequest(id, "brief", jpeg), id, cancel, WarmUpTimeout), id);
         }
         catch (DescriptionException ex) when (ex.Code is "too_much_text" or "content_filtered" or "empty")
         {
@@ -227,16 +269,17 @@ public sealed class WindowsAI : IDisposable
         }
         try
         {
-            await ReadTextAsync(png, cancel);
+            await ReadTextAsync(png, WarmUpTimeout, cancel);
         }
         catch (DescriptionException ex) when (ex.Code is "not_supported" or "disabled_by_user" or "not_ready")
         {
-            // A PC without Windows AI's text recognizer: the built-in OCR reads text there, and needs no warming.
+            // A PC without Windows AI's text recognizer, or one still getting it ready: the built-in OCR reads text
+            // meanwhile, and needs no warming.
         }
         return started.Elapsed;
     }
 
-    /// <summary>The longest warming up may take: a cold load is 6 to 18 seconds.</summary>
+    /// <summary>How long each of warming up's two requests may take with the helper: a cold load is 6 to 18 seconds.</summary>
     internal static TimeSpan WarmUpTimeout { get; set; } = TimeSpan.FromSeconds(60);
 
     /// <summary>Tries the first size, then smaller ones while the model reports an internal error. Any other failure
@@ -259,16 +302,23 @@ public sealed class WindowsAI : IDisposable
         throw last!;
     }
 
-    /// <summary>Sends one request line and gives back the helper's answer line, one request at a time.</summary>
-    private async Task<string> SendAsync(string request, int id, CancellationToken cancel)
+    /// <summary>Sends one request line and gives back the helper's answer line, one request at a time. <paramref name="limit"/>
+    /// (the client's timeout when null) counts from when the request reaches the helper, not while it waits its turn, so only
+    /// Windows not answering is a timeout. A timeout is counted before the next request's turn, which then gives up.</summary>
+    private async Task<string> SendAsync(string request, int id, CancellationToken cancel, TimeSpan? limit = null)
     {
+        var timeouts = Volatile.Read(ref _timeouts);
         await _gate.WaitAsync(cancel);
         try
         {
+            // The request ahead wasn't answered: this one would very likely wait as long again, while describing's text
+            // could come from the built-in OCR now. A later request tries a fresh helper.
+            if (Volatile.Read(ref _timeouts) != timeouts)
+                throw new DescriptionException("timeout", NotRespondingMessage);
             var server = EnsureServer();
             string? line;
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancel);
-            timeout.CancelAfter(_timeout);
+            timeout.CancelAfter(limit ?? _timeout);
             try
             {
                 await server.WriteLineAsync(request, timeout.Token);
@@ -281,7 +331,10 @@ public sealed class WindowsAI : IDisposable
                 StopServer();
                 if (!cancel.IsCancellationRequested) Log.Error("helper", "A request to the helper failed; it was stopped", ex);
                 if (ex is OperationCanceledException && !cancel.IsCancellationRequested)
-                    throw new DescriptionException("timeout", "Windows took too long with this picture. Try again.");
+                {
+                    Interlocked.Increment(ref _timeouts);
+                    throw new DescriptionException("timeout", NotRespondingMessage);
+                }
                 if (ex is IOException)
                     throw new DescriptionException("internal_error", $"The {AppInfo.HelperName} stopped unexpectedly.");
                 throw;

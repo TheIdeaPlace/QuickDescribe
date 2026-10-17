@@ -59,6 +59,101 @@ public class HelperConnectionTests
     }
 
     [Fact]
+    public async Task ARequestWaitingBehindOneThatTimedOut_GivesUpAtOnce_AndALaterOneTriesAFreshHelper()
+    {
+        var helpers = new FakeHelpers { Setup = h => h.Hold = new TaskCompletionSource() };
+        using var ai = helpers.Client(TimeSpan.FromMilliseconds(200));
+        var describing = ai.DescribeAsync(Jpeg, "brief", Token);
+        var reading = ai.ReadTextAsync([1], Token);
+        Assert.Equal("timeout", (await Assert.ThrowsAsync<DescriptionException>(() => describing)).Code);
+        var waited = await Assert.ThrowsAsync<DescriptionException>(() => reading);
+        Assert.Equal("timeout", waited.Code);
+        Assert.Equal(WindowsAI.NotRespondingMessage, waited.Message);
+        // The read never reached a helper: the hung one was stopped, and no other was started for it.
+        Assert.Single(helpers.Started);
+        Assert.Single(helpers.Started[0].Requests);
+
+        helpers.Setup = null;
+        Assert.Equal(["Line one", "Line two"], await ai.ReadTextAsync([1], Token));
+        Assert.Equal(2, helpers.Started.Count);
+    }
+
+    [Fact]
+    public async Task ARequestWaitingBehindOneGivenUp_StillGoesAhead()
+    {
+        var hold = new TaskCompletionSource();
+        var helpers = new FakeHelpers { Setup = h => h.Hold = hold };
+        using var ai = helpers.Client();
+        using var cancel = new CancellationTokenSource();
+        var first = ai.ReadTextAsync([1], cancel.Token);
+        var second = ai.ReadTextAsync([2], Token);
+        await Task.Delay(50, Token);
+        // Before cancelling: the second request may start its helper the moment the first lets go.
+        helpers.Setup = null;
+        cancel.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => first);
+        Assert.Equal(["Line one", "Line two"], await second);
+        Assert.Equal(2, helpers.Started.Count);
+    }
+
+    [Fact]
+    public async Task ARequestWaitingBehindAHungWarmUp_GivesUpAtOnce()
+    {
+        var was = WindowsAI.WarmUpTimeout;
+        WindowsAI.WarmUpTimeout = TimeSpan.FromMilliseconds(300);
+        try
+        {
+            var helpers = new FakeHelpers { Setup = h => h.Hold = new TaskCompletionSource() };
+            using var ai = helpers.Client(TimeSpan.FromMinutes(3));
+            var warming = ai.WarmUpAsync(Token);
+            while (helpers.Started.Count == 0 || helpers.Started[0].Requests.Count == 0) await Task.Delay(10, Token);
+            var reading = ai.ReadTextAsync([1], Token);
+            Assert.Equal("timeout", (await Assert.ThrowsAsync<DescriptionException>(() => warming)).Code);
+            Assert.Equal("timeout", (await Assert.ThrowsAsync<DescriptionException>(() => reading)).Code);
+            Assert.Single(helpers.Started);
+        }
+        finally
+        {
+            WindowsAI.WarmUpTimeout = was;
+        }
+    }
+
+    [Fact]
+    public async Task AWarmUpWaitingItsTurnLongerThanItsLimit_IsntATimeout()
+    {
+        var was = WindowsAI.WarmUpTimeout;
+        WindowsAI.WarmUpTimeout = TimeSpan.FromMilliseconds(200);
+        try
+        {
+            var hold = new TaskCompletionSource();
+            var helpers = new FakeHelpers { Setup = h => h.Hold = hold };
+            using var ai = helpers.Client();
+            // The person's own picture, slow but answered, ahead of the warm-up.
+            var reading = ai.ReadTextAsync([1], Token);
+            var warming = ai.WarmUpAsync(Token);
+            await Task.Delay(500, Token);
+            hold.SetResult();
+            Assert.Equal(["Line one", "Line two"], await reading);
+            await warming;
+            Assert.Single(helpers.Started);
+            Assert.Equal(3, helpers.Started[0].Requests.Count);
+        }
+        finally
+        {
+            WindowsAI.WarmUpTimeout = was;
+        }
+    }
+
+    [Fact]
+    public void TheTextRecognizer_IsLeftAlone_OnlyWhileACheckSaysItNeedsGettingReady()
+    {
+        Assert.False(WindowsAI.RecognizerNotReady(null));
+        Assert.False(WindowsAI.RecognizerNotReady(WindowsAI.ParseReadiness("""{"identity":true,"state":"Ready"}""")));
+        Assert.False(WindowsAI.RecognizerNotReady(WindowsAI.ParseReadiness("""{"identity":true,"state":"Ready","components":{"textRecognition":"Ready"}}""")));
+        Assert.True(WindowsAI.RecognizerNotReady(WindowsAI.ParseReadiness("""{"identity":true,"state":"Ready","components":{"textRecognition":"NotReady"}}""")));
+    }
+
+    [Fact]
     public async Task GivingUp_KillsTheHelper_SoItsLateAnswerCantBeReadAsTheNextOnes()
     {
         var helpers = new FakeHelpers { Setup = h => h.Hold = new TaskCompletionSource() };
@@ -165,7 +260,10 @@ public class HelperConnectionTests
         {
             var helpers = new FakeHelpers { Setup = h => h.Hold = new TaskCompletionSource() };
             using var ai = helpers.Client(TimeSpan.FromMinutes(3));
-            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => ai.WarmUpAsync(Token));
+            // Said, not taken for closing, so it's logged.
+            var ex = await Assert.ThrowsAsync<DescriptionException>(() => ai.WarmUpAsync(Token));
+            Assert.Equal("timeout", ex.Code);
+            Assert.Equal(WindowsAI.NotRespondingMessage, ex.Message);
             Assert.True(helpers.Started[0].Killed);
             // The next request gets a fresh helper at once.
             helpers.Setup = null;
@@ -193,6 +291,12 @@ public class HelperConnectionTests
     [InlineData("Error", false)]
     public void OnlyStatesThatCantChange_AreRememberedForTheSession(string state, bool final) =>
         Assert.Equal(final, WindowsAI.IsFinal(state));
+
+    [Theory]
+    [InlineData("Ready", "Phi Silica, Windows' language model, is on this PC. It isn't supported in Quick Describe yet.")]
+    [InlineData("NotSupportedOnCurrentSystem", "Phi Silica, Windows' language model, isn't supported in Quick Describe yet.")]
+    public void CheckWindowsAI_DoesntOfferPhiSilica_AsIfQuickDescribeCouldUseIt(string state, string line) =>
+        Assert.Equal(line, QuickDescribe.Views.MainWindow.LanguageModelLine(state));
 }
 
 /// <summary>Describing and reading together, with a fake helper: one half failing never loses the other.</summary>
@@ -236,6 +340,19 @@ public class DescribingTests
         var result = await Describing.RunAsync(Drawn.Text(600, 120, 28, "Save Cancel Help"), "accessible", ai, Token, NotSupported);
         Assert.Equal("unavailable", result.DescriptionCode);
         Assert.Equal(["Save Cancel Help"], result.Lines);
+    }
+
+    [Fact]
+    public async Task AModelStillGettingReady_IsntAskedToDescribe_AndTheTextStillComes()
+    {
+        var helpers = new FakeHelpers();
+        using var ai = helpers.Client();
+        var result = await Describing.RunAsync(Drawn.Solid(64, 64, 0, 0, 200), "brief", ai, Token,
+            _ => Task.FromResult(new AIReadiness(true, "NotReady", null)));
+        Assert.Equal("not_ready", result.DescriptionCode);
+        Assert.Equal(Describing.NotReadyMessage, result.DescriptionProblem);
+        Assert.Equal(["Line one", "Line two"], result.Lines);
+        Assert.Equal(["read"], helpers.Started[0].Requests.Select(r => (string?)r["op"]));
     }
 
     [Fact]
