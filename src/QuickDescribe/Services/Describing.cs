@@ -28,7 +28,11 @@ public static class Describing
         try
         {
             var readiness = await check(cancel);
-            if (!readiness.Usable) return (null, "unavailable", readiness.Message);
+            if (!readiness.Usable)
+            {
+                Log.Write("describe", $"Not described: Windows AI is {readiness.State}: {readiness.Message}");
+                return (null, "unavailable", readiness.Message);
+            }
             // The picture is frozen, so another thread can encode it.
             var text = await ai.DescribeAsync(size => Task.Run(() => Pictures.Jpeg(image, size), cancel), kind, cancel);
             return text.Length > 0 ? (text, null, null) : (null, "empty", "Windows gave an empty description.");

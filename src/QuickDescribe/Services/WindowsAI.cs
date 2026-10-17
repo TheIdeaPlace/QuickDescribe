@@ -59,7 +59,17 @@ public sealed class WindowsAI : IDisposable
     private IHelperConnection? _server;
     private int _nextId;
 
-    public WindowsAI() : this(StartServer, TimeSpan.FromMinutes(3))
+    /// <summary>How many requests Windows didn't answer in time, so a request that waited behind one gives up at once.</summary>
+    private int _timeouts;
+
+    /// <summary>Why a request timed out. Windows AI has stopped answering anything on Kelly's PC (17 Oct 2026, after its
+    /// AI components updated) while still reporting itself ready, until the PC was restarted.</summary>
+    internal const string NotRespondingMessage =
+        "Windows' AI didn't answer. If this keeps happening, restarting the PC may help.";
+
+    /// <summary>A description takes about 3 seconds, and the first in a session 6 to 18 (measured 15 Oct 2026), so a
+    /// minute and a half is a helper that has stopped answering.</summary>
+    public WindowsAI() : this(StartServer, TimeSpan.FromSeconds(90))
     {
     }
 
@@ -206,6 +216,7 @@ public sealed class WindowsAI : IDisposable
     public async Task<TimeSpan> WarmUpAsync(CancellationToken cancel = default)
     {
         var started = Stopwatch.StartNew();
+        var outer = cancel;
         using var limit = CancellationTokenSource.CreateLinkedTokenSource(cancel);
         limit.CancelAfter(WarmUpTimeout);
         cancel = limit.Token;
@@ -218,20 +229,29 @@ public sealed class WindowsAI : IDisposable
         }, cancel);
         try
         {
-            var id = Interlocked.Increment(ref _nextId);
-            ParseResponse(await SendAsync(BuildRequest(id, "brief", jpeg), id, cancel), id);
+            try
+            {
+                var id = Interlocked.Increment(ref _nextId);
+                ParseResponse(await SendAsync(BuildRequest(id, "brief", jpeg), id, cancel), id);
+            }
+            catch (DescriptionException ex) when (ex.Code is "too_much_text" or "content_filtered" or "empty")
+            {
+                // A verdict on the blank picture: the model loaded all the same.
+            }
+            try
+            {
+                await ReadTextAsync(png, cancel);
+            }
+            catch (DescriptionException ex) when (ex.Code is "not_supported" or "disabled_by_user" or "not_ready")
+            {
+                // A PC without Windows AI's text recognizer: the built-in OCR reads text there, and needs no warming.
+            }
         }
-        catch (DescriptionException ex) when (ex.Code is "too_much_text" or "content_filtered" or "empty")
+        catch (OperationCanceledException) when (limit.IsCancellationRequested && !outer.IsCancellationRequested)
         {
-            // A verdict on the blank picture: the model loaded all the same.
-        }
-        try
-        {
-            await ReadTextAsync(png, cancel);
-        }
-        catch (DescriptionException ex) when (ex.Code is "not_supported" or "disabled_by_user" or "not_ready")
-        {
-            // A PC without Windows AI's text recognizer: the built-in OCR reads text there, and needs no warming.
+            // Its own limit, not Quick Describe closing: Windows isn't answering, and a request waiting behind gives up too.
+            Interlocked.Increment(ref _timeouts);
+            throw new DescriptionException("timeout", NotRespondingMessage);
         }
         return started.Elapsed;
     }
@@ -262,9 +282,14 @@ public sealed class WindowsAI : IDisposable
     /// <summary>Sends one request line and gives back the helper's answer line, one request at a time.</summary>
     private async Task<string> SendAsync(string request, int id, CancellationToken cancel)
     {
+        var timeouts = Volatile.Read(ref _timeouts);
         await _gate.WaitAsync(cancel);
         try
         {
+            // The request ahead wasn't answered: this one would very likely wait as long again, while describing's text
+            // could come from the built-in OCR now. A later request tries a fresh helper.
+            if (Volatile.Read(ref _timeouts) != timeouts)
+                throw new DescriptionException("timeout", NotRespondingMessage);
             var server = EnsureServer();
             string? line;
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancel);
@@ -281,7 +306,10 @@ public sealed class WindowsAI : IDisposable
                 StopServer();
                 if (!cancel.IsCancellationRequested) Log.Error("helper", "A request to the helper failed; it was stopped", ex);
                 if (ex is OperationCanceledException && !cancel.IsCancellationRequested)
-                    throw new DescriptionException("timeout", "Windows took too long with this picture. Try again.");
+                {
+                    Interlocked.Increment(ref _timeouts);
+                    throw new DescriptionException("timeout", NotRespondingMessage);
+                }
                 if (ex is IOException)
                     throw new DescriptionException("internal_error", $"The {AppInfo.HelperName} stopped unexpectedly.");
                 throw;

@@ -609,7 +609,7 @@ public partial class MainWindow : Window
                         ? "Windows AI's text recognizer is ready, and reads the text in pictures."
                         : $"Windows AI's text recognizer: {recognizer}. Windows' built-in text recognition reads the text instead.");
                 if (details.Components.TryGetValue("languageModel", out var language))
-                    lines.Add($"Phi Silica, Windows' language model, which answering questions would need: {language}.");
+                    lines.Add(LanguageModelLine(language));
             }
             else
             {
@@ -625,6 +625,12 @@ public partial class MainWindow : Window
             // Closing.
         }
     }
+
+    /// <summary>Check Windows AI's line on Phi Silica. Its ready state says only that the model is on the PC: Quick
+    /// Describe can't use it yet (Windows answers Access is denied), so "ready" alone would promise what isn't there.</summary>
+    internal static string LanguageModelLine(string state) => state == "Ready"
+        ? "Phi Silica, Windows' language model, is on this PC. It isn't supported in Quick Describe yet."
+        : $"Phi Silica, Windows' language model: {state}. It isn't supported in Quick Describe yet.";
 
     private static string TextLanguages()
     {

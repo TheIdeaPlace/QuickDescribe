@@ -59,6 +59,42 @@ public class HelperConnectionTests
     }
 
     [Fact]
+    public async Task ARequestWaitingBehindOneThatTimedOut_GivesUpAtOnce_AndALaterOneTriesAFreshHelper()
+    {
+        var helpers = new FakeHelpers { Setup = h => h.Hold = new TaskCompletionSource() };
+        using var ai = helpers.Client(TimeSpan.FromMilliseconds(200));
+        var describing = ai.DescribeAsync(Jpeg, "brief", Token);
+        var reading = ai.ReadTextAsync([1], Token);
+        Assert.Equal("timeout", (await Assert.ThrowsAsync<DescriptionException>(() => describing)).Code);
+        var waited = await Assert.ThrowsAsync<DescriptionException>(() => reading);
+        Assert.Equal("timeout", waited.Code);
+        Assert.Equal(WindowsAI.NotRespondingMessage, waited.Message);
+        // The read never reached a helper: the hung one was stopped, and no other was started for it.
+        Assert.Single(helpers.Started);
+        Assert.Single(helpers.Started[0].Requests);
+
+        helpers.Setup = null;
+        Assert.Equal(["Line one", "Line two"], await ai.ReadTextAsync([1], Token));
+        Assert.Equal(2, helpers.Started.Count);
+    }
+
+    [Fact]
+    public async Task ARequestWaitingBehindOneGivenUp_StillGoesAhead()
+    {
+        var hold = new TaskCompletionSource();
+        var helpers = new FakeHelpers { Setup = h => h.Hold = hold };
+        using var ai = helpers.Client();
+        using var cancel = new CancellationTokenSource();
+        var first = ai.ReadTextAsync([1], cancel.Token);
+        var second = ai.ReadTextAsync([2], Token);
+        await Task.Delay(50, Token);
+        cancel.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => first);
+        helpers.Setup = null;
+        Assert.Equal(["Line one", "Line two"], await second);
+    }
+
+    [Fact]
     public async Task GivingUp_KillsTheHelper_SoItsLateAnswerCantBeReadAsTheNextOnes()
     {
         var helpers = new FakeHelpers { Setup = h => h.Hold = new TaskCompletionSource() };
@@ -165,7 +201,10 @@ public class HelperConnectionTests
         {
             var helpers = new FakeHelpers { Setup = h => h.Hold = new TaskCompletionSource() };
             using var ai = helpers.Client(TimeSpan.FromMinutes(3));
-            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => ai.WarmUpAsync(Token));
+            // Said, not taken for closing, so it's logged.
+            var ex = await Assert.ThrowsAsync<DescriptionException>(() => ai.WarmUpAsync(Token));
+            Assert.Equal("timeout", ex.Code);
+            Assert.Equal(WindowsAI.NotRespondingMessage, ex.Message);
             Assert.True(helpers.Started[0].Killed);
             // The next request gets a fresh helper at once.
             helpers.Setup = null;
@@ -193,6 +232,12 @@ public class HelperConnectionTests
     [InlineData("Error", false)]
     public void OnlyStatesThatCantChange_AreRememberedForTheSession(string state, bool final) =>
         Assert.Equal(final, WindowsAI.IsFinal(state));
+
+    [Theory]
+    [InlineData("Ready", "Phi Silica, Windows' language model, is on this PC. It isn't supported in Quick Describe yet.")]
+    [InlineData("NotSupportedOnCurrentSystem", "Phi Silica, Windows' language model: NotSupportedOnCurrentSystem. It isn't supported in Quick Describe yet.")]
+    public void CheckWindowsAI_DoesntOfferPhiSilica_AsIfQuickDescribeCouldUseIt(string state, string line) =>
+        Assert.Equal(line, QuickDescribe.Views.MainWindow.LanguageModelLine(state));
 }
 
 /// <summary>Describing and reading together, with a fake helper: one half failing never loses the other.</summary>
