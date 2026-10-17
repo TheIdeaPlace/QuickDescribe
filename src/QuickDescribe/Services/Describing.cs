@@ -28,11 +28,12 @@ public static class Describing
         try
         {
             var readiness = await check(cancel);
-            if (!readiness.Usable)
-            {
-                Log.Write("describe", $"Not described: Windows AI is {readiness.State}: {readiness.Message}");
-                return (null, "unavailable", readiness.Message);
-            }
+            if (!readiness.Usable || readiness.State == "NotReady") LogOnce(readiness);
+            else _logged = null;
+            if (!readiness.Usable) return (null, "unavailable", readiness.Message);
+            // Getting it ready can be a download, longer than a request may take; Quick Describe started that when it
+            // started (and Help, Check Windows AI starts it again).
+            if (readiness.State == "NotReady") return (null, "not_ready", NotReadyMessage);
             // The picture is frozen, so another thread can encode it.
             var text = await ai.DescribeAsync(size => Task.Run(() => Pictures.Jpeg(image, size), cancel), kind, cancel);
             return text.Length > 0 ? (text, null, null) : (null, "empty", "Windows gave an empty description.");
@@ -47,6 +48,19 @@ public static class Describing
             Log.Error("describe", "Describing failed", ex);
             return (null, "error", $"{ex.Message.Trim()} ({ex.GetType().Name})");
         }
+    }
+
+    internal const string NotReadyMessage =
+        "Windows is still getting its image description model ready. The first time, this can take a few minutes; try again then.";
+
+    /// <summary>The state last logged as unusable, so a PC without Windows AI doesn't log it with every picture.</summary>
+    private static string? _logged;
+
+    private static void LogOnce(AIReadiness readiness)
+    {
+        if (_logged == readiness.State) return;
+        _logged = readiness.State;
+        Log.Write("describe", $"Not described: Windows AI is {readiness.State}" + (readiness.Message is { } why ? $": {why}" : ""));
     }
 
     private static async Task<(IReadOnlyList<string>? Lines, string? Problem)> ReadAsync(BitmapSource image, WindowsAI ai, CancellationToken cancel)

@@ -210,15 +210,20 @@ public partial class MainWindow : Window
     private string HotKeyConflict() =>
         $"{_hotKeys!.Map.Refused(_hotKeys.Unavailable)} The Describe menu still does the same, and File, Settings chooses others.";
 
-    /// <summary>Gets Windows' model ready in the background if it only needs downloading, then warms it up, so the first
-    /// description isn't the one that waits for either. Not on energy saver, where the person has asked Windows to save
-    /// power; the first description then just takes longer.</summary>
+    /// <summary>Gets Windows' models ready in the background if they only need downloading, then warms them up, so the first
+    /// description isn't the one that waits for either: a download takes longer than a request may. No warming up on energy
+    /// saver, where the person has asked Windows to save power; the first description then just takes longer.</summary>
     private async Task GetModelReadyAsync(CancellationToken cancel)
     {
         try
         {
             var readiness = await WindowsAI.CheckAsync(cancel);
             if (readiness.State == "NotReady") readiness = await WindowsAI.PrepareAsync(cancel);
+            if (WindowsAI.RecognizerNotReady(readiness))
+            {
+                readiness = await WindowsAI.PrepareTextRecognitionAsync(cancel);
+                Log.Write("helper", $"Getting the text recognizer ready: {readiness.Components.GetValueOrDefault("textRecognition", "unknown")}");
+            }
             if (readiness.State != "Ready" || EnergySaverOn()) return;
             var took = await _ai.WarmUpAsync(cancel);
             Log.Write("helper", $"Warmed up in {took.TotalSeconds:0.0} s");
@@ -630,7 +635,7 @@ public partial class MainWindow : Window
     /// Describe can't use it yet (Windows answers Access is denied), so "ready" alone would promise what isn't there.</summary>
     internal static string LanguageModelLine(string state) => state == "Ready"
         ? "Phi Silica, Windows' language model, is on this PC. It isn't supported in Quick Describe yet."
-        : $"Phi Silica, Windows' language model: {state}. It isn't supported in Quick Describe yet.";
+        : "Phi Silica, Windows' language model, isn't supported in Quick Describe yet.";
 
     private static string TextLanguages()
     {
