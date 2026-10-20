@@ -33,14 +33,9 @@ public partial class MainWindow : Window
     /// modal dialog also disables this window, which <see cref="OnHotKey"/> checks too.</summary>
     private bool _dialogOpen;
 
-    /// <summary>A result that arrived while Quick Describe wasn't in front: spoken when it next is.</summary>
-    private string? _unspoken;
-
-    /// <summary><see cref="_unspoken"/> has the text-only note in it: it counts as said once it's spoken.</summary>
-    private bool _unspokenSaysTextOnly;
-
-    /// <summary>What the Result box showed at start, so the welcome can be brought up to date if it's still there.</summary>
-    private string? _startText;
+    /// <summary>A result that arrived while Quick Describe wasn't in front: spoken when it next is. SaysTextOnly: it has
+    /// the text-only note in it, which counts as said only once it's spoken.</summary>
+    private (string Text, bool SaysTextOnly)? _unspoken;
 
     /// <summary>How long Windows takes to show the screen without Quick Describe once it's asked to leave it out of
     /// captures: a frame or two.</summary>
@@ -74,11 +69,11 @@ public partial class MainWindow : Window
             // Set off for a quiet start, so it didn't take focus; from now on, showing the window comes to the front.
             ShowActivated = true;
             if (GreetIfQuiet()) return;
-            if (_unspoken is not { } text) return;
+            if (_unspoken is not { } unspoken) return;
             _unspoken = null;
-            if (_unspokenSaysTextOnly) TextOnlySaid();
             ResultBox.Focus();
-            Announcer.Announce(text);
+            Announcer.Announce(unspoken.Text);
+            if (unspoken.SaysTextOnly) MarkTextOnlySaid();
         };
         Closed += (_, _) =>
         {
@@ -98,9 +93,8 @@ public partial class MainWindow : Window
         if (_hotKeys!.Unavailable.Count > 0)
         {
             Log.Write("start", $"Hotkeys another app has: {string.Join(", ", _hotKeys.Unavailable.Select(_hotKeys.Map.GestureFor))}");
-            ResultBox.Text = HotKeyConflict() + Environment.NewLine + Environment.NewLine + Welcome();
+            ResultBox.Text = StartText();
         }
-        _startText = ResultBox.Text;
         _ = GetModelReadyAsync(_closing.Token);
     }
 
@@ -172,7 +166,6 @@ public partial class MainWindow : Window
         if (_requests.Cancel()) ResultBox.Text = $"Stopped describing {_describing ?? "the picture"}.";
         _describing = null;
         _unspoken = null;
-        _unspokenSaysTextOnly = false;
         _returnTo = IntPtr.Zero;
         Title = AppInfo.Name;
         if (!_settings.KeepRunningSaid)
@@ -253,16 +246,20 @@ public partial class MainWindow : Window
     /// promising descriptions. Not announced, and focus stays where it is: it's the same box, a moment after start.</summary>
     private void WelcomeTextOnly()
     {
-        if (_startText is null || ResultBox.Text != _startText || _requests.IsRunning) return;
-        ResultBox.Text = _hotKeys is { Unavailable.Count: > 0 }
-            ? HotKeyConflict() + Environment.NewLine + Environment.NewLine + Welcome()
-            : Welcome();
-        _startText = null;
+        if (IsWelcomeShowing()) ResultBox.Text = StartText();
     }
 
-    private void TextOnlySaid()
+    /// <summary>What the box shows at start: the welcome, after a hotkey another app has.</summary>
+    private string StartText() => _hotKeys is { Unavailable.Count: > 0 }
+        ? HotKeyConflict() + Environment.NewLine + Environment.NewLine + Welcome()
+        : Welcome();
+
+    /// <summary>The box shows the welcome (or F1's text, which starts with it), not a result.</summary>
+    private bool IsWelcomeShowing() =>
+        !_requests.IsRunning && ResultBox.Text.Contains(Environment.NewLine + "Quick Describe comes to the front", StringComparison.Ordinal);
+
+    private void MarkTextOnlySaid()
     {
-        _unspokenSaysTextOnly = false;
         if (_settings.TextOnlySaid) return;
         _settings.TextOnlySaid = true;
         _settings.Save();
@@ -304,7 +301,7 @@ public partial class MainWindow : Window
         (textOnly ? "" : "Describe, Description Type chooses Accessible, Detailed, Brief or Diagram descriptions. ") +
         "You can also open a picture file (Ctrl+O) or drop one on this window. " +
         (textOnly
-            ? "This PC reads the text in pictures with Windows' text recognition. Describing them needs a Copilot+ PC. "
+            ? "This PC reads the text in pictures with Windows' text recognition. Describing them needs a Copilot+ PC and a recent version of Windows 11. "
             : "Pictures are described with Windows' on-device AI on Copilot+ PCs, and their text read with Windows' text recognition. ") +
         "File, Settings chooses the hotkeys, and whether Quick Describe starts with Windows. Pictures never leave this PC.";
     }
@@ -342,9 +339,17 @@ public partial class MainWindow : Window
         await DescribeAsync(target, foreground);
     }
 
+    /// <summary>A new request: a result still waiting to be spoken is out of date now, and isn't spoken as the window
+    /// comes to the front for this one.</summary>
+    private Request StartRequest()
+    {
+        _unspoken = null;
+        return _requests.Start();
+    }
+
     private async Task DescribeAsync(Target target, IntPtr foreground)
     {
-        var request = _requests.Start();
+        var request = StartRequest();
         Picture? picture;
         string? problem;
         // Quick Describe still showing (switched away from without Escape) is left out of its own picture, which would
@@ -391,13 +396,11 @@ public partial class MainWindow : Window
         }
     }
 
-    private Task DescribeAsync(Picture picture) => DescribeAsync(picture, _requests.Start());
+    private Task DescribeAsync(Picture picture) => DescribeAsync(picture, StartRequest());
 
     private async Task DescribeAsync(Picture picture, Request request)
     {
         _describing = picture.Source;
-        _unspoken = null;
-        _unspokenSaysTextOnly = false;
         Title = $"Describing {picture.Source} - {AppInfo.Name}";
         ResultBox.Text = $"Describing {picture.Source}…";
         Announcer.Announce($"Describing {picture.Source}");
@@ -432,13 +435,12 @@ public partial class MainWindow : Window
         {
             ResultBox.Focus();
             Announcer.Announce(result.Announcement(sayTextOnly));
-            if (sayTextOnly) TextOnlySaid();
+            if (sayTextOnly) MarkTextOnlySaid();
         }
         else
         {
-            // Said once it's heard: a newer result first, and it's said with that one.
-            _unspoken = result.Announcement(sayTextOnly);
-            _unspokenSaysTextOnly = sayTextOnly;
+            // The note counts as said once it's heard: if a newer result comes first, that one says it.
+            _unspoken = (result.Announcement(sayTextOnly), sayTextOnly);
         }
     }
 
@@ -605,8 +607,7 @@ public partial class MainWindow : Window
         Log.Write("settings", $"Hotkeys {SettingsWindow.Summary(dialog.Map)} Description type {dialog.Kind}. " +
                               $"Start at sign-in {(dialog.SignIn ? "on" : "off")}. Keep running {(dialog.KeepRunning ? "on" : "off")}.");
         // The welcome or F1 text says the hotkeys, so it's brought up to date; a result in the box is left alone.
-        if (!_requests.IsRunning && ResultBox.Text.Contains(Environment.NewLine + "Quick Describe comes to the front", StringComparison.Ordinal))
-            ResultBox.Text = Welcome();
+        if (IsWelcomeShowing()) ResultBox.Text = Welcome();
         ResultBox.Focus();
         Announcer.Announce("Settings saved. " + SettingsWindow.Summary(dialog.Map));
         // Turned on or off as chosen; said when Windows doesn't (turned off in its own startup apps, or by an organization).
@@ -761,7 +762,6 @@ public partial class MainWindow : Window
         }
         _describing = null;
         _unspoken = null;
-        _unspokenSaysTextOnly = false;
         var returnTo = _returnTo;
         _returnTo = IntPtr.Zero;
         WindowState = WindowState.Minimized;

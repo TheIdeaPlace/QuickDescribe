@@ -7,13 +7,14 @@ public sealed record Result(string? Description, string? DescriptionCode, string
 {
     public const string TextHeading = "Text in the picture:";
 
-    /// <summary>The description code for a PC that can't describe at all (not a Copilot+ PC): the result is the text alone.</summary>
+    /// <summary>The description code for a PC that can't describe at all (not a Copilot+ PC, or Windows 11 too old): the result is the text alone.</summary>
     public const string TextOnlyCode = "text_only";
 
     /// <summary>Said with the first result on such a PC, once ever (Settings.TextOnlySaid), in place of a "No description"
     /// line with every result.</summary>
     public const string TextOnlyNote =
-        "This PC can't describe pictures: Windows' image description needs a Copilot+ PC. Quick Describe reads the text in them instead.";
+        "This PC can't describe pictures: Windows' image description needs a Copilot+ PC and a recent version of Windows 11. " +
+        "Quick Describe reads the text in them instead.";
 
     /// <summary>Only the text, because this PC can't describe.</summary>
     public bool TextOnly => DescriptionCode == TextOnlyCode;

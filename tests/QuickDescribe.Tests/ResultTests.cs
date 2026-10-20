@@ -60,6 +60,25 @@ public class ResultTests
     }
 
     [Fact]
+    public void TheTextOnlyNote_ComesWithNoTextOrUnreadableText_Too()
+    {
+        var none = new Result(null, Result.TextOnlyCode, null, [], null);
+        Assert.Equal($"{Result.TextOnlyNote}{Gap}No text found.", none.BoxText(sayTextOnly: true));
+        Assert.Equal($"{Result.TextOnlyNote} No text found.", none.Announcement(sayTextOnly: true));
+        var unreadable = new Result(null, Result.TextOnlyCode, null, null, "No OCR here.");
+        Assert.Equal($"{Result.TextOnlyNote}{Gap}Text couldn't be read: No OCR here.", unreadable.BoxText(sayTextOnly: true));
+        Assert.Equal($"{Result.TextOnlyNote} Text couldn't be read.", unreadable.Announcement(sayTextOnly: true));
+    }
+
+    [Theory]
+    [InlineData("NotSupportedOnCurrentSystem", true)]
+    [InlineData("DisabledByUser", false)]
+    [InlineData("NotReady", false)]
+    [InlineData("Error", false)]
+    [InlineData("Ready", false)]
+    public void OnlyNotSupported_IsTextOnly(string state, bool textOnly) => Assert.Equal(textOnly, WindowsAI.IsTextOnly(state));
+
+    [Fact]
     public void TheTextOnlyNote_IsSaidUntilItsBeenHeard_AndOnlyWithTextOnlyResults()
     {
         var textOnly = new Result(null, Result.TextOnlyCode, null, ["OPEN"], null);
