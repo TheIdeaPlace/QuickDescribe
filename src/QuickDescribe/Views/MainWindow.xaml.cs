@@ -246,7 +246,9 @@ public partial class MainWindow : Window
     /// promising descriptions. Not announced, and focus stays where it is: it's the same box, a moment after start.</summary>
     private void WelcomeTextOnly()
     {
-        if (IsWelcomeShowing()) ResultBox.Text = StartText();
+        // F1's text, pressed before the check came back, is left alone: it's being read, and F1 again brings it up to date.
+        if (IsWelcomeShowing() && !ResultBox.Text.Contains(InAppKeys(_settings.KeepRunning), StringComparison.Ordinal))
+            ResultBox.Text = StartText();
     }
 
     /// <summary>What the box shows at start: the welcome, after a hotkey another app has.</summary>
