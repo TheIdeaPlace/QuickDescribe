@@ -7,7 +7,7 @@ Everything happens on your PC, with the AI built into Windows on Copilot+ PCs. N
 ## What you need
 
 - Windows 11 on a **Copilot+ PC**, for descriptions. Windows AI's image description runs on the PC's NPU, and only Copilot+ PCs have one.
-- On PCs without Windows AI, Quick Describe still reads the text in pictures, with Windows' built-in text recognition. It just doesn't describe them.
+- On other PCs, Quick Describe reads the text in pictures, with Windows' built-in text recognition, but doesn't describe them. See "On a PC that isn't a Copilot+ PC" below.
 
 ## Installing
 
@@ -64,6 +64,12 @@ If another app already uses one of the hotkeys, Quick Describe says which when i
 - **Keep running in the notification area when I close the window:** off unless you turn it on. Quick Describe's icon is then in the notification area the whole time, and closing the window (Alt+F4, or its Close button) hides it and leaves the hotkeys working; the first time, Quick Describe says where it went. A hotkey brings it back with the result, and so does choosing its icon (Windows+B, then the arrow keys and Enter; new icons start in the hidden icons, behind Show Hidden Icons). The icon's menu (Shift+F10 or the Applications key) has Open and Exit. **File, Exit** quits. Escape still minimizes to the taskbar, as it always does.
 
 OK tries the hotkeys with Windows. If another app (or Windows itself, which keeps many Windows key combinations) already has one, Settings says which, so you can choose another letter; OK again keeps it anyway. **Reset to Defaults** goes back to Ctrl+Alt+Shift with S, W, F and V, Accessible descriptions, and both check boxes off.
+
+## On a PC that isn't a Copilot+ PC
+
+Quick Describe works the same way, with the same hotkeys, but gives you only the text in the picture. You hear how many lines of text it found, and the Result box has "Text in the picture:" and the lines. The first time, it says once why: "This PC can't describe pictures: Windows' image description needs a Copilot+ PC and a recent version of Windows 11. Quick Describe reads the text in them instead." After that, results are just the text. The welcome text and F1 say this PC reads text only. The description type has no effect on these PCs.
+
+If your PC is a Copilot+ PC but Windows' AI features are turned off (Settings, Privacy & security), each result says there's no description, since you can turn them back on. **Help, Check Windows AI** says which applies.
 
 ## What to expect
 

@@ -30,8 +30,8 @@ public static class Describing
             var readiness = await check(cancel);
             if (!readiness.Usable || readiness.State == "NotReady") LogOnce(readiness);
             else _logged = null;
-            // A PC that can never describe (no Copilot+ NPU) just reads the text: saying "no description" every time is noise.
-            if (readiness.State == "NotSupportedOnCurrentSystem") return (null, Result.TextOnlyCode, readiness.Message);
+            // A PC that can never describe just reads the text: saying "no description" every time is noise.
+            if (WindowsAI.IsTextOnly(readiness.State)) return (null, Result.TextOnlyCode, readiness.Message);
             if (!readiness.Usable) return (null, "unavailable", readiness.Message);
             // Getting it ready can be a download, longer than a request may take; Quick Describe started that when it
             // started (and Help, Check Windows AI starts it again).

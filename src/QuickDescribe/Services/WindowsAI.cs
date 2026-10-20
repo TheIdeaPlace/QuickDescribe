@@ -132,10 +132,14 @@ public sealed class WindowsAI : IDisposable
     }
 
     /// <summary>Known, from a check this session, that this PC can't describe at all (not a Copilot+ PC).</summary>
-    public static bool KnownTextOnly => _checked?.Readiness.State == "NotSupportedOnCurrentSystem";
+    public static bool KnownTextOnly => _checked is { } known && IsTextOnly(known.Readiness.State);
+
+    /// <summary>A state that means this PC can't describe at all (not a Copilot+ PC, or Windows 11 too old), so it reads
+    /// text only.</summary>
+    internal static bool IsTextOnly(string state) => state == "NotSupportedOnCurrentSystem";
 
     /// <summary>States that won't change while Quick Describe runs.</summary>
-    internal static bool IsFinal(string state) => state is "Ready" or "NotSupportedOnCurrentSystem";
+    internal static bool IsFinal(string state) => state == "Ready" || IsTextOnly(state);
 
     /// <summary>The helper's --details: its readiness plus the other Windows AI features' states, for Check Windows AI.</summary>
     public static async Task<AIReadiness> DetailsAsync(CancellationToken cancel = default)
