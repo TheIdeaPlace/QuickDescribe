@@ -251,10 +251,11 @@ public partial class MainWindow : Window
         }
     }
 
-    private string Welcome() => Welcome(_hotKeys?.Map ?? _settings.HotKeys);
+    private string Welcome() => Welcome(_hotKeys?.Map ?? _settings.HotKeys, WindowsAI.KnownTextOnly);
 
-    /// <summary>What the Result box says at first, and F1: the hotkeys as they're set, and what else there is.</summary>
-    internal static string Welcome(HotKeyMap map)
+    /// <summary>What the Result box says at first, and F1: the hotkeys as they're set, and what else there is.
+    /// <paramref name="textOnly"/>: this PC is known to read text only.</summary>
+    internal static string Welcome(HotKeyMap map, bool textOnly = false)
     {
         var what = new Dictionary<Target, string>
         {
@@ -271,9 +272,11 @@ public partial class MainWindow : Window
               (on.Count < HotKeyMap.Targets.Length ? Environment.NewLine + "File, Settings sets the others." : "");
         return keys + Environment.NewLine + Environment.NewLine +
         "Quick Describe comes to the front with the result here. Escape goes back to where you were. " +
-        "Describe, Description Type chooses Accessible, Detailed, Brief or Diagram descriptions. " +
+        (textOnly ? "" : "Describe, Description Type chooses Accessible, Detailed, Brief or Diagram descriptions. ") +
         "You can also open a picture file (Ctrl+O) or drop one on this window. " +
-        "Pictures are described with Windows' on-device AI on Copilot+ PCs, and their text read with Windows' text recognition. " +
+        (textOnly
+            ? "This PC reads the text in pictures with Windows' text recognition. Describing them needs a Copilot+ PC. "
+            : "Pictures are described with Windows' on-device AI on Copilot+ PCs, and their text read with Windows' text recognition. ") +
         "File, Settings chooses the hotkeys, and whether Quick Describe starts with Windows. Pictures never leave this PC.";
     }
 
@@ -389,7 +392,13 @@ public partial class MainWindow : Window
         _requests.Finish(request);
         _describing = null;
         Title = $"{picture.Source} - {AppInfo.Name}";
-        ResultBox.Text = result.BoxText();
+        var sayTextOnly = result.TextOnly && !_settings.TextOnlySaid;
+        if (sayTextOnly)
+        {
+            _settings.TextOnlySaid = true;
+            _settings.Save();
+        }
+        ResultBox.Text = result.BoxText(sayTextOnly);
         ResultBox.CaretIndex = 0;
         ResultBox.ScrollToHome();
         // Spoken and focused only while Quick Describe is in front. Switched away from meanwhile (or never brought to the
@@ -397,11 +406,11 @@ public partial class MainWindow : Window
         if (IsActive)
         {
             ResultBox.Focus();
-            Announcer.Announce(result.Announcement());
+            Announcer.Announce(result.Announcement(sayTextOnly));
         }
         else
         {
-            _unspoken = result.Announcement();
+            _unspoken = result.Announcement(sayTextOnly);
         }
     }
 

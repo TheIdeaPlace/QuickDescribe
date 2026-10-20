@@ -131,6 +131,9 @@ public sealed class WindowsAI : IDisposable
         return readiness;
     }
 
+    /// <summary>Known, from a check this session, that this PC can't describe at all (not a Copilot+ PC).</summary>
+    public static bool KnownTextOnly => _checked?.Readiness.State == "NotSupportedOnCurrentSystem";
+
     /// <summary>States that won't change while Quick Describe runs.</summary>
     internal static bool IsFinal(string state) => state is "Ready" or "NotSupportedOnCurrentSystem";
 
