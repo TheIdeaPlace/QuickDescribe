@@ -18,6 +18,10 @@ public sealed record Result(string? Description, string? DescriptionCode, string
     /// <summary>Only the text, because this PC can't describe.</summary>
     public bool TextOnly => DescriptionCode == TextOnlyCode;
 
+    /// <summary>Whether this result should say <see cref="TextOnlyNote"/>: the first text-only result, until the note has
+    /// been heard.</summary>
+    public bool SaysTextOnly(bool alreadySaid) => TextOnly && !alreadySaid;
+
     /// <summary>What goes in the Result box: the description first, then the text, each with a plain line when it's missing.
     /// On a PC that can't describe, just the text, after <see cref="TextOnlyNote"/> when <paramref name="sayTextOnly"/>.</summary>
     public string BoxText(bool sayTextOnly = false)

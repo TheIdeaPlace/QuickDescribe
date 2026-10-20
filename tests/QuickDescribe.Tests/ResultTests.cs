@@ -60,6 +60,16 @@ public class ResultTests
     }
 
     [Fact]
+    public void TheTextOnlyNote_IsSaidUntilItsBeenHeard_AndOnlyWithTextOnlyResults()
+    {
+        var textOnly = new Result(null, Result.TextOnlyCode, null, ["OPEN"], null);
+        Assert.True(textOnly.SaysTextOnly(alreadySaid: false));
+        Assert.False(textOnly.SaysTextOnly(alreadySaid: true));
+        Assert.False(new Result("A red mug.", null, null, [], null).SaysTextOnly(alreadySaid: false));
+        Assert.False(new Result(null, "unavailable", "Turned off.", [], null).SaysTextOnly(alreadySaid: false));
+    }
+
+    [Fact]
     public void SayingTextOnly_IsIgnoredWhenThereIsADescription()
     {
         var result = new Result("A red mug.", null, null, [], null);
