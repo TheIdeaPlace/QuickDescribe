@@ -42,6 +42,41 @@ public class ResultTests
     }
 
     [Fact]
+    public void APCThatCantDescribe_GivesTheTextAlone()
+    {
+        var result = new Result(null, Result.TextOnlyCode, "Needs a Copilot+ PC.", ["OPEN", "Mon-Fri"], null);
+        Assert.Equal($"Text in the picture:{Environment.NewLine}OPEN{Environment.NewLine}Mon-Fri", result.BoxText());
+        Assert.Equal("2 lines of text follow.", result.Announcement());
+        Assert.Equal("No text found.", new Result(null, Result.TextOnlyCode, null, [], null).Announcement());
+        Assert.Equal("Text couldn't be read: No OCR here.", new Result(null, Result.TextOnlyCode, null, null, "No OCR here.").BoxText());
+    }
+
+    [Fact]
+    public void APCThatCantDescribe_SaysSoWhenAsked()
+    {
+        var result = new Result(null, Result.TextOnlyCode, "Needs a Copilot+ PC.", ["OPEN"], null);
+        Assert.Equal($"{Result.TextOnlyNote}{Gap}Text in the picture:{Environment.NewLine}OPEN", result.BoxText(sayTextOnly: true));
+        Assert.Equal($"{Result.TextOnlyNote} 1 line of text follows.", result.Announcement(sayTextOnly: true));
+    }
+
+    [Fact]
+    public void TheTextOnlyNote_IsSaidUntilItsBeenHeard_AndOnlyWithTextOnlyResults()
+    {
+        var textOnly = new Result(null, Result.TextOnlyCode, null, ["OPEN"], null);
+        Assert.True(textOnly.SaysTextOnly(alreadySaid: false));
+        Assert.False(textOnly.SaysTextOnly(alreadySaid: true));
+        Assert.False(new Result("A red mug.", null, null, [], null).SaysTextOnly(alreadySaid: false));
+        Assert.False(new Result(null, "unavailable", "Turned off.", [], null).SaysTextOnly(alreadySaid: false));
+    }
+
+    [Fact]
+    public void SayingTextOnly_IsIgnoredWhenThereIsADescription()
+    {
+        var result = new Result("A red mug.", null, null, [], null);
+        Assert.Equal(result.Announcement(), result.Announcement(sayTextOnly: true));
+    }
+
+    [Fact]
     public void OtherFailures_SayTheHelpersMessage()
     {
         var result = new Result(null, "content_filtered", "Windows' content filter declined to describe this picture.", null, "No OCR here.");

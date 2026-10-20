@@ -338,8 +338,31 @@ public class DescribingTests
         var helpers = new FakeHelpers { StartFailure = new DescriptionException("not_installed", "The helper didn't start.") };
         using var ai = helpers.Client();
         var result = await Describing.RunAsync(Drawn.Text(600, 120, 28, "Save Cancel Help"), "accessible", ai, Token, NotSupported);
-        Assert.Equal("unavailable", result.DescriptionCode);
+        Assert.True(result.TextOnly);
         Assert.Equal(["Save Cancel Help"], result.Lines);
+    }
+
+    [Fact]
+    public async Task APCThatCantDescribe_NeverAsksTheHelperToDescribe()
+    {
+        var helpers = new FakeHelpers();
+        using var ai = helpers.Client();
+        var result = await Describing.RunAsync(Drawn.Solid(64, 64, 0, 0, 200), "accessible", ai, Token, NotSupported);
+        Assert.True(result.TextOnly);
+        Assert.Null(result.Description);
+        Assert.Equal(["Line one", "Line two"], result.Lines);
+        Assert.DoesNotContain(helpers.Started.SelectMany(h => h.Requests), r => (string?)r["op"] != "read");
+    }
+
+    [Fact]
+    public async Task WindowsAITurnedOff_IsntTextOnly_SinceItCanBeTurnedOn()
+    {
+        var helpers = new FakeHelpers();
+        using var ai = helpers.Client();
+        var result = await Describing.RunAsync(Drawn.Solid(64, 64, 0, 0, 200), "accessible", ai, Token,
+            _ => Task.FromResult(new AIReadiness(true, "DisabledByUser", "Turned off.")));
+        Assert.False(result.TextOnly);
+        Assert.Equal("unavailable", result.DescriptionCode);
     }
 
     [Fact]

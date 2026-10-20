@@ -36,6 +36,12 @@ public partial class MainWindow : Window
     /// <summary>A result that arrived while Quick Describe wasn't in front: spoken when it next is.</summary>
     private string? _unspoken;
 
+    /// <summary><see cref="_unspoken"/> has the text-only note in it: it counts as said once it's spoken.</summary>
+    private bool _unspokenSaysTextOnly;
+
+    /// <summary>What the Result box showed at start, so the welcome can be brought up to date if it's still there.</summary>
+    private string? _startText;
+
     /// <summary>How long Windows takes to show the screen without Quick Describe once it's asked to leave it out of
     /// captures: a frame or two.</summary>
     private static readonly TimeSpan LeaveOutOfCapture = TimeSpan.FromMilliseconds(100);
@@ -70,6 +76,7 @@ public partial class MainWindow : Window
             if (GreetIfQuiet()) return;
             if (_unspoken is not { } text) return;
             _unspoken = null;
+            if (_unspokenSaysTextOnly) TextOnlySaid();
             ResultBox.Focus();
             Announcer.Announce(text);
         };
@@ -93,6 +100,7 @@ public partial class MainWindow : Window
             Log.Write("start", $"Hotkeys another app has: {string.Join(", ", _hotKeys.Unavailable.Select(_hotKeys.Map.GestureFor))}");
             ResultBox.Text = HotKeyConflict() + Environment.NewLine + Environment.NewLine + Welcome();
         }
+        _startText = ResultBox.Text;
         _ = GetModelReadyAsync(_closing.Token);
     }
 
@@ -164,6 +172,7 @@ public partial class MainWindow : Window
         if (_requests.Cancel()) ResultBox.Text = $"Stopped describing {_describing ?? "the picture"}.";
         _describing = null;
         _unspoken = null;
+        _unspokenSaysTextOnly = false;
         _returnTo = IntPtr.Zero;
         Title = AppInfo.Name;
         if (!_settings.KeepRunningSaid)
@@ -218,6 +227,7 @@ public partial class MainWindow : Window
         try
         {
             var readiness = await WindowsAI.CheckAsync(cancel);
+            if (WindowsAI.KnownTextOnly) WelcomeTextOnly();
             if (readiness.State == "NotReady") readiness = await WindowsAI.PrepareAsync(cancel);
             if (WindowsAI.RecognizerNotReady(readiness))
             {
@@ -239,6 +249,25 @@ public partial class MainWindow : Window
         }
     }
 
+    /// <summary>The check found this PC can't describe: the welcome, if it's still what the box shows, says so instead of
+    /// promising descriptions. Not announced, and focus stays where it is: it's the same box, a moment after start.</summary>
+    private void WelcomeTextOnly()
+    {
+        if (_startText is null || ResultBox.Text != _startText || _requests.IsRunning) return;
+        ResultBox.Text = _hotKeys is { Unavailable.Count: > 0 }
+            ? HotKeyConflict() + Environment.NewLine + Environment.NewLine + Welcome()
+            : Welcome();
+        _startText = null;
+    }
+
+    private void TextOnlySaid()
+    {
+        _unspokenSaysTextOnly = false;
+        if (_settings.TextOnlySaid) return;
+        _settings.TextOnlySaid = true;
+        _settings.Save();
+    }
+
     private static bool EnergySaverOn()
     {
         try
@@ -251,10 +280,11 @@ public partial class MainWindow : Window
         }
     }
 
-    private string Welcome() => Welcome(_hotKeys?.Map ?? _settings.HotKeys);
+    private string Welcome() => Welcome(_hotKeys?.Map ?? _settings.HotKeys, WindowsAI.KnownTextOnly);
 
-    /// <summary>What the Result box says at first, and F1: the hotkeys as they're set, and what else there is.</summary>
-    internal static string Welcome(HotKeyMap map)
+    /// <summary>What the Result box says at first, and F1: the hotkeys as they're set, and what else there is.
+    /// <paramref name="textOnly"/>: this PC is known to read text only.</summary>
+    internal static string Welcome(HotKeyMap map, bool textOnly = false)
     {
         var what = new Dictionary<Target, string>
         {
@@ -271,9 +301,11 @@ public partial class MainWindow : Window
               (on.Count < HotKeyMap.Targets.Length ? Environment.NewLine + "File, Settings sets the others." : "");
         return keys + Environment.NewLine + Environment.NewLine +
         "Quick Describe comes to the front with the result here. Escape goes back to where you were. " +
-        "Describe, Description Type chooses Accessible, Detailed, Brief or Diagram descriptions. " +
+        (textOnly ? "" : "Describe, Description Type chooses Accessible, Detailed, Brief or Diagram descriptions. ") +
         "You can also open a picture file (Ctrl+O) or drop one on this window. " +
-        "Pictures are described with Windows' on-device AI on Copilot+ PCs, and their text read with Windows' text recognition. " +
+        (textOnly
+            ? "This PC reads the text in pictures with Windows' text recognition. Describing them needs a Copilot+ PC. "
+            : "Pictures are described with Windows' on-device AI on Copilot+ PCs, and their text read with Windows' text recognition. ") +
         "File, Settings chooses the hotkeys, and whether Quick Describe starts with Windows. Pictures never leave this PC.";
     }
 
@@ -365,6 +397,7 @@ public partial class MainWindow : Window
     {
         _describing = picture.Source;
         _unspoken = null;
+        _unspokenSaysTextOnly = false;
         Title = $"Describing {picture.Source} - {AppInfo.Name}";
         ResultBox.Text = $"Describing {picture.Source}…";
         Announcer.Announce($"Describing {picture.Source}");
@@ -389,7 +422,8 @@ public partial class MainWindow : Window
         _requests.Finish(request);
         _describing = null;
         Title = $"{picture.Source} - {AppInfo.Name}";
-        ResultBox.Text = result.BoxText();
+        var sayTextOnly = result.SaysTextOnly(_settings.TextOnlySaid);
+        ResultBox.Text = result.BoxText(sayTextOnly);
         ResultBox.CaretIndex = 0;
         ResultBox.ScrollToHome();
         // Spoken and focused only while Quick Describe is in front. Switched away from meanwhile (or never brought to the
@@ -397,11 +431,14 @@ public partial class MainWindow : Window
         if (IsActive)
         {
             ResultBox.Focus();
-            Announcer.Announce(result.Announcement());
+            Announcer.Announce(result.Announcement(sayTextOnly));
+            if (sayTextOnly) TextOnlySaid();
         }
         else
         {
-            _unspoken = result.Announcement();
+            // Said once it's heard: a newer result first, and it's said with that one.
+            _unspoken = result.Announcement(sayTextOnly);
+            _unspokenSaysTextOnly = sayTextOnly;
         }
     }
 
@@ -724,6 +761,7 @@ public partial class MainWindow : Window
         }
         _describing = null;
         _unspoken = null;
+        _unspokenSaysTextOnly = false;
         var returnTo = _returnTo;
         _returnTo = IntPtr.Zero;
         WindowState = WindowState.Minimized;

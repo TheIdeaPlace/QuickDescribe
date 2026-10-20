@@ -172,6 +172,15 @@ public class HotKeyMapTests
     }
 
     [Fact]
+    public void TheWelcome_OnAPCThatCantDescribe_SaysItReadsText()
+    {
+        var text = MainWindow.Welcome(HotKeyMap.Default, textOnly: true);
+        Assert.Contains("This PC reads the text in pictures", text);
+        Assert.DoesNotContain("Description Type", text);
+        Assert.Contains("Description Type", MainWindow.Welcome(HotKeyMap.Default));
+    }
+
+    [Fact]
     public void RefusedHotkeys_AreListedPlainly()
     {
         var map = HotKeyMap.Default;
