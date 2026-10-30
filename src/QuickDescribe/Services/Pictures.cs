@@ -177,6 +177,70 @@ public static class Pictures
         encoder.Save(stream);
         return stream.ToArray();
     }
+
+    // ---- Saving a screenshot ----
+
+    /// <summary>The types Save Screenshot offers, PNG first: it keeps a screen's text sharp.</summary>
+    public const string SaveFilter = "PNG picture|*.png|JPEG picture|*.jpg;*.jpeg";
+
+    /// <summary>The longest a suggested name's source part may be, so a long window title doesn't make an unwieldy name.</summary>
+    private const int NameSourceLength = 60;
+
+    /// <summary>The name Save Screenshot suggests: what was taken and when, such as "Active window, Notepad 2026-10-30
+    /// 14.05.12.png", with the characters a file name can't have left out.</summary>
+    public static string ScreenshotName(string source, DateTime taken)
+    {
+        // The note is for hearing, not for a file's name: it's the active window's picture.
+        if (source.EndsWith(ScreenCapture.NoPlaceNote, StringComparison.Ordinal)) source = source[..^ScreenCapture.NoPlaceNote.Length];
+        var invalid = Path.GetInvalidFileNameChars();
+        var name = new string(source.Select(c => invalid.Contains(c) ? ' ' : c).ToArray());
+        name = string.Join(' ', name.Split(' ', StringSplitOptions.RemoveEmptyEntries));
+        if (name.Length > NameSourceLength)
+        {
+            // Not between the halves of an emoji, which would leave half of one in the name.
+            var cut = char.IsHighSurrogate(name[NameSourceLength - 1]) ? NameSourceLength - 1 : NameSourceLength;
+            name = name[..cut].TrimEnd();
+        }
+        // Windows drops a trailing dot from a name, which would lose the space before the date.
+        name = name.TrimEnd('.', ' ');
+        if (name.Length == 0) name = "Screenshot";
+        return $"{name} {taken:yyyy-MM-dd HH.mm.ss}.png";
+    }
+
+    /// <summary>Saves a picture as the file's extension says: JPEG for .jpg and .jpeg, PNG otherwise. Throws a
+    /// <see cref="PictureException"/> with a readable message when it can't.</summary>
+    public static void Save(BitmapSource image, string path)
+    {
+        BitmapEncoder encoder = Path.GetExtension(path).ToLowerInvariant() is ".jpg" or ".jpeg"
+            ? new JpegBitmapEncoder { QualityLevel = 90 }
+            : new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(image));
+        // Written beside it first, so a failure part way doesn't leave a broken picture, or spoil one being replaced.
+        var partial = path + ".partial";
+        try
+        {
+            using (var stream = File.Create(partial)) encoder.Save(stream);
+            File.Move(partial, path, overwrite: true);
+        }
+        catch (Exception ex)
+        {
+            try { File.Delete(partial); }
+            catch (Exception) { /* nothing more to do */ }
+            if (ex is not (IOException or UnauthorizedAccessException or NotSupportedException or ArgumentException)) throw;
+            throw new PictureException($"{Path.GetFileName(path)} couldn't be saved: {SaveProblem(ex, partial, path)}");
+        }
+    }
+
+    private const int DiskFull = unchecked((int)0x80070070);
+
+    /// <summary>Why a save failed, in words that name the file the person chose, not the one written beside it first.</summary>
+    internal static string SaveProblem(Exception ex, string partial, string path) => ex switch
+    {
+        UnauthorizedAccessException => "Windows doesn't allow saving in that folder, or the file is read-only.",
+        DirectoryNotFoundException => "the folder isn't there any more.",
+        IOException { HResult: DiskFull } => "the drive is full.",
+        _ => ex.Message.Replace(partial, path, StringComparison.OrdinalIgnoreCase).Trim(),
+    };
 }
 
 /// <summary>A picture couldn't be had; the message says why, for the person.</summary>

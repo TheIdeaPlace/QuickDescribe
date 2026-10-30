@@ -42,8 +42,11 @@ public static class ScreenCapture
         if (area is { } a) return (new Picture(Capture(a), name.Length > 0 ? $"Focused item, {name}" : "Focused item"), null);
         var (window, problem) = Window(foreground);
         if (window is null) return (null, problem ?? "Couldn't find the focused item.");
-        return (window with { Source = $"{window.Source} (the focused item has no place on the screen)" }, null);
+        return (window with { Source = window.Source + NoPlaceNote }, null);
     }
+
+    /// <summary>Added to the active window's source when the focused item has no place on the screen.</summary>
+    public const string NoPlaceNote = " (the focused item has no place on the screen)";
 
     /// <summary>The area to take around the focused item, and its name, from UI Automation. Not on the UI thread:
     /// UI Automation can wait on the app that has focus, which may be this one.</summary>

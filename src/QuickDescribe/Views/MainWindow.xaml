@@ -14,6 +14,8 @@
                 <MenuItem x:Name="OpenItem" Header="_Open Picture…" InputGestureText="Ctrl+O" Click="OnOpen" />
                 <MenuItem x:Name="ClipboardItem" Header="Describe _Clipboard" Click="OnClipboard" />
                 <Separator />
+                <MenuItem Header="S_ave Screenshot…" InputGestureText="Ctrl+S" Click="OnSaveScreenshot" />
+                <Separator />
                 <MenuItem Header="_Settings…" InputGestureText="Ctrl+Comma" Click="OnSettings" />
                 <Separator />
                 <MenuItem x:Name="ExitItem" Header="E_xit" InputGestureText="Alt+F4" Click="OnExit" />
@@ -57,6 +59,7 @@
             <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="8">
                 <Button Content="Describe _Clipboard" Padding="10,4" Margin="0,0,8,0" Click="OnClipboard" />
                 <Button Content="_Open Picture…" Padding="10,4" Margin="0,0,8,0" Click="OnOpen" />
+                <Button Content="_Save Screenshot…" Padding="10,4" Margin="0,0,8,0" Click="OnSaveScreenshot" />
                 <Button Content="Co_py Result" Padding="10,4" Click="OnCopy" />
             </StackPanel>
         </Grid>

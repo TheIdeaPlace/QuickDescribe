@@ -34,6 +34,9 @@ public sealed class Settings
     /// <summary>On a PC that can't describe, the first result says it reads text only; once.</summary>
     public bool TextOnlySaid { get; set; }
 
+    /// <summary>The folder a screenshot was last saved in, where Save Screenshot starts next time; null for Pictures.</summary>
+    public string? ScreenshotFolder { get; set; }
+
     /// <summary>When updates were last looked for, so the quiet check runs at most once a day.</summary>
     public DateTime? LastUpdateCheck { get; set; }
 

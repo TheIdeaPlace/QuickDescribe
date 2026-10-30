@@ -37,6 +37,15 @@ public partial class MainWindow : Window
     /// the text-only note in it, which counts as said only once it's spoken.</summary>
     private (string Text, bool SaysTextOnly)? _unspoken;
 
+    /// <summary>The picture the last request took of the screen, a window or the focused item, and when, for Save
+    /// Screenshot. Null when the last request was a clipboard picture or a file, which are already kept elsewhere.
+    /// Kept until the next request, even closed to the notification area, as the result is: a full screen's pixels
+    /// (about 33 MB at 4K), the price of being able to save it after reading the result.</summary>
+    private (Picture Picture, DateTime Taken)? _screenshot;
+
+    /// <summary>Save Screenshot is under way: a result arriving meanwhile is held, and said after "Saved", not cut off by it.</summary>
+    private bool _saving;
+
     /// <summary>How long Windows takes to show the screen without Quick Describe once it's asked to leave it out of
     /// captures: a frame or two.</summary>
     private static readonly TimeSpan LeaveOutOfCapture = TimeSpan.FromMilliseconds(100);
@@ -69,7 +78,7 @@ public partial class MainWindow : Window
             // Set off for a quiet start, so it didn't take focus; from now on, showing the window comes to the front.
             ShowActivated = true;
             if (GreetIfQuiet()) return;
-            if (_unspoken is not { } unspoken) return;
+            if (_saving || _unspoken is not { } unspoken) return;
             _unspoken = null;
             ResultBox.Focus();
             Announcer.Announce(unspoken.Text);
@@ -346,6 +355,7 @@ public partial class MainWindow : Window
     private Request StartRequest()
     {
         _unspoken = null;
+        _screenshot = null;
         return _requests.Start();
     }
 
@@ -394,6 +404,7 @@ public partial class MainWindow : Window
         }
         else
         {
+            if (target != Target.Clipboard) _screenshot = (picture, DateTime.Now);
             await DescribeAsync(picture, request);
         }
     }
@@ -538,6 +549,85 @@ public partial class MainWindow : Window
         }
     }
 
+    internal const string NoScreenshotText =
+        "There's no screenshot to save. Describe the screen, the active window or the focused item first, then save it.";
+
+    /// <summary>File > Save Screenshot: saves the picture the last description took of the screen, a window or the focused
+    /// item. The result stays in the box; a problem is said in a message box rather than replacing it.</summary>
+    private async void OnSaveScreenshot(object sender, RoutedEventArgs e)
+    {
+        if (_dialogOpen) return;
+        if (_screenshot is not { } shot)
+        {
+            MessageBox.Show(this, NoScreenshotText, "Save Screenshot", MessageBoxButton.OK, MessageBoxImage.Information);
+            ResultBox.Focus();
+            return;
+        }
+        var (picture, taken) = shot;
+        var folder = _settings.ScreenshotFolder is { } kept && Directory.Exists(kept)
+            ? kept
+            : Environment.GetFolderPath(Environment.SpecialFolder.MyPictures);
+        var dialog = new SaveFileDialog
+        {
+            Title = "Save Screenshot",
+            Filter = Pictures.SaveFilter,
+            FileName = Pictures.ScreenshotName(picture.Source, taken),
+            DefaultExt = ".png",
+            AddExtension = true,
+            InitialDirectory = folder,
+        };
+        _dialogOpen = true;
+        _saving = true;
+        string? saved = null;
+        try
+        {
+            if (dialog.ShowDialog(this) != true) return;
+            // Back in the Result box before encoding, which takes a moment for a large screen: the box is said as focus
+            // arrives, and "Saved" after it rather than over it.
+            ResultBox.Focus();
+            var path = dialog.FileName;
+            // Off the UI thread. The picture is frozen, so it can be read there.
+            await Task.Run(() => Pictures.Save(picture.Image, path));
+            _settings.ScreenshotFolder = Path.GetDirectoryName(path);
+            _settings.Save();
+            Log.Write("save", $"Saved a screenshot ({Path.GetExtension(path).TrimStart('.').ToLowerInvariant()})");
+            saved = $"Saved {Path.GetFileName(path)}.";
+        }
+        catch (PictureException ex)
+        {
+            MessageBox.Show(this, ex.Message, "Save Screenshot", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+        catch (Exception ex)
+        {
+            // Anything else the encoder throws: said, rather than taken for a crash.
+            Log.Error("save", "Saving a screenshot failed", ex);
+            MessageBox.Show(this, $"The screenshot couldn't be saved: {ex.Message.Trim()}", "Save Screenshot", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+        finally
+        {
+            _dialogOpen = false;
+            _saving = false;
+            ResultBox.Focus();
+            SayAfterSaving(saved);
+        }
+    }
+
+    /// <summary>After Save Screenshot: "Saved" and the file's name, then a result that arrived while saving, in one
+    /// announcement so neither cuts the other off.</summary>
+    private void SayAfterSaving(string? saved)
+    {
+        if (IsActive && _unspoken is { } unspoken)
+        {
+            _unspoken = null;
+            Announcer.Announce(saved is null ? unspoken.Text : $"{saved} {unspoken.Text}");
+            if (unspoken.SaysTextOnly) MarkTextOnlySaid();
+        }
+        else if (saved is not null)
+        {
+            Announcer.Announce(saved);
+        }
+    }
+
     private void OnExit(object sender, RoutedEventArgs e) => Exit();
 
     // ---- Settings ----
@@ -630,6 +720,7 @@ public partial class MainWindow : Window
         "Ctrl+O opens a picture file." + Environment.NewLine +
         "Ctrl+Comma opens Settings, for the hotkeys, the description type, starting with Windows and keeping running." + Environment.NewLine +
         "Ctrl+V describes the picture on the clipboard." + Environment.NewLine +
+        "Ctrl+S saves the screenshot of the screen, window or focused item just described." + Environment.NewLine +
         "Ctrl+Shift+C copies the result." + Environment.NewLine +
         "Escape stops describing, minimizes Quick Describe and goes back to where you were. The hotkeys keep working." + Environment.NewLine +
         (keepRunning
@@ -735,6 +826,11 @@ public partial class MainWindow : Window
         {
             e.Handled = true;
             OnCopy(sender, e);
+        }
+        else if (e.Key == Key.S && modifiers == ModifierKeys.Control)
+        {
+            e.Handled = true;
+            OnSaveScreenshot(sender, e);
         }
         else if (e.Key == Key.OemComma && modifiers == ModifierKeys.Control)
         {
