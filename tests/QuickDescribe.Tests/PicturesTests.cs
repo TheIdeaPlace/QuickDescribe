@@ -106,4 +106,110 @@ public class PicturesTests : IDisposable
         Assert.StartsWith("Pictures|*.jpg;*.jpeg;*.png", Pictures.OpenFilter);
         Assert.EndsWith("|All files|*.*", Pictures.OpenFilter);
     }
+
+    // ---- Save Screenshot ----
+
+    private static readonly DateTime Taken = new(2026, 10, 30, 14, 5, 12);
+
+    [Theory]
+    [InlineData("Screen", "Screen 2026-10-30 14.05.12.png")]
+    [InlineData("Active window, Untitled - Notepad", "Active window, Untitled - Notepad 2026-10-30 14.05.12.png")]
+    [InlineData(@"Focused item, C:\Users\a.txt: ""draft""?", "Focused item, C Users a.txt draft 2026-10-30 14.05.12.png")]
+    [InlineData("Active window, Ends with a dot.", "Active window, Ends with a dot 2026-10-30 14.05.12.png")]
+    [InlineData("Active window, Notepad (the focused item has no place on the screen)", "Active window, Notepad 2026-10-30 14.05.12.png")]
+    [InlineData("<>:|", "Screenshot 2026-10-30 14.05.12.png")]
+    [InlineData("", "Screenshot 2026-10-30 14.05.12.png")]
+    public void ScreenshotName_SaysWhatAndWhen_AsAFileCanBeNamed(string source, string expected) =>
+        Assert.Equal(expected, Pictures.ScreenshotName(source, Taken));
+
+    [Fact]
+    public void ScreenshotName_KeepsALongTitleShort()
+    {
+        var name = Pictures.ScreenshotName("Active window, " + new string('x', 300), Taken);
+        Assert.Equal(60 + " 2026-10-30 14.05.12.png".Length, name.Length);
+        Assert.Empty(name.Intersect(Path.GetInvalidFileNameChars()));
+    }
+
+    [Fact]
+    public void ScreenshotName_DoesntCutAnEmojiInHalf()
+    {
+        // 59 characters, then an emoji (two UTF-16 halves) across the 60-character limit.
+        var name = Pictures.ScreenshotName(new string('x', 59) + "\U0001F600 tail", Taken);
+        Assert.Equal(new string('x', 59) + " 2026-10-30 14.05.12.png", name);
+    }
+
+    [Fact]
+    public void SaveProblem_NamesTheChosenFile_NotThePartOne()
+    {
+        const string path = @"D:\x\shot.png", partial = path + ".partial";
+        Assert.StartsWith("Windows doesn't allow", Pictures.SaveProblem(new UnauthorizedAccessException($"Access to the path '{partial}' is denied."), partial, path));
+        Assert.Equal("the folder isn't there any more.", Pictures.SaveProblem(new DirectoryNotFoundException(partial), partial, path));
+        Assert.Equal("the drive is full.", Pictures.SaveProblem(new IOException("full", unchecked((int)0x80070070)), partial, path));
+        Assert.Equal($"The process cannot access the file '{path}'.", Pictures.SaveProblem(new IOException($"The process cannot access the file '{partial}'."), partial, path));
+    }
+
+    [Theory]
+    [InlineData("shot.png", new byte[] { 0x89, 0x50, 0x4E, 0x47 })]
+    [InlineData("shot.PNG", new byte[] { 0x89, 0x50, 0x4E, 0x47 })]
+    [InlineData("shot.jpg", new byte[] { 0xFF, 0xD8 })]
+    [InlineData("shot.jpeg", new byte[] { 0xFF, 0xD8 })]
+    [InlineData("shot.bmp", new byte[] { 0x89, 0x50, 0x4E, 0x47 })]
+    public void Save_WritesTheTypeItsExtensionSays_AtFullSize(string name, byte[] start)
+    {
+        var path = Path.Combine(_folder, name);
+        Pictures.Save(Drawn.Solid(300, 200, 0, 0, 200), path);
+        Assert.Equal(start, File.ReadAllBytes(path)[..start.Length]);
+        var read = Pictures.FromFile(path);
+        Assert.Equal((300, 200), (read.Image.PixelWidth, read.Image.PixelHeight));
+        Assert.False(File.Exists(path + ".partial"));
+    }
+
+    [Fact]
+    public void Save_ReplacesAFileThatsThere()
+    {
+        var path = Path.Combine(_folder, "again.png");
+        File.WriteAllText(path, "old");
+        Pictures.Save(Drawn.Solid(10, 10, 0, 0, 0), path);
+        Assert.Equal(10, Pictures.FromFile(path).Image.PixelWidth);
+    }
+
+    [Fact]
+    public async Task Save_WorksOffTheUIThread_AsSaveScreenshotUsesIt()
+    {
+        var picture = Drawn.Solid(400, 300, 0, 200, 0);
+        var path = Path.Combine(_folder, "off.png");
+        await Task.Run(() => Pictures.Save(picture, path), TestContext.Current.CancellationToken);
+        Assert.True(new FileInfo(path).Length > 0);
+    }
+
+    [Fact]
+    public void Save_ToAFolderThatIsntThere_SaysSoByName_AndLeavesNothing()
+    {
+        var path = Path.Combine(_folder, "gone", "shot.png");
+        var ex = Assert.Throws<PictureException>(() => Pictures.Save(Drawn.Solid(10, 10, 0, 0, 0), path));
+        Assert.Equal("shot.png couldn't be saved: the folder isn't there any more.", ex.Message);
+        Assert.False(File.Exists(path + ".partial"));
+    }
+
+    [Fact]
+    public void Save_OverAFileInUse_SaysSo_AndLeavesTheFileAlone()
+    {
+        var path = Path.Combine(_folder, "busy.png");
+        File.WriteAllText(path, "old");
+        using (File.Open(path, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            var ex = Assert.Throws<PictureException>(() => Pictures.Save(Drawn.Solid(10, 10, 0, 0, 0), path));
+            Assert.StartsWith("busy.png couldn't be saved:", ex.Message);
+            Assert.DoesNotContain(".partial", ex.Message);
+        }
+        Assert.Equal("old", File.ReadAllText(path));
+        Assert.False(File.Exists(path + ".partial"));
+    }
+
+    [Fact]
+    public void TheSaveFilter_OffersPngFirst()
+    {
+        Assert.StartsWith("PNG picture|*.png|", Pictures.SaveFilter);
+        Assert.Contains("*.jpg", Pictures.SaveFilter);
+    }
 }
