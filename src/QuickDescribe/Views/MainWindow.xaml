@@ -29,6 +29,7 @@
             </MenuItem>
             <MenuItem Header="_Edit">
                 <MenuItem Header="_Copy Result" InputGestureText="Ctrl+Shift+C" Click="OnCopy" />
+                <MenuItem Header="Copy _Screenshot" InputGestureText="Ctrl+Shift+S" Click="OnCopyScreenshot" />
             </MenuItem>
             <MenuItem Header="_Help">
                 <MenuItem Header="_Keyboard Shortcuts" InputGestureText="F1" Click="OnShortcuts" />
@@ -56,12 +57,14 @@
             <TextBox x:Name="ResultBox" Grid.Row="1" Margin="8,0,8,0" IsReadOnly="True" IsReadOnlyCaretVisible="True"
                      TextWrapping="Wrap" AcceptsReturn="True" VerticalScrollBarVisibility="Auto"
                      FontSize="15" AutomationProperties.Name="Result" />
-            <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="8">
+            <!-- Wraps, so no button is cut off in a narrow window or with large text. -->
+            <WrapPanel Grid.Row="2" Orientation="Horizontal" Margin="8">
                 <Button Content="Describe _Clipboard" Padding="10,4" Margin="0,0,8,0" Click="OnClipboard" />
                 <Button Content="_Open Picture…" Padding="10,4" Margin="0,0,8,0" Click="OnOpen" />
                 <Button Content="_Save Screenshot…" Padding="10,4" Margin="0,0,8,0" Click="OnSaveScreenshot" />
+                <Button Content="Cop_y Screenshot" Padding="10,4" Margin="0,0,8,0" Click="OnCopyScreenshot" />
                 <Button Content="Co_py Result" Padding="10,4" Click="OnCopy" />
-            </StackPanel>
+            </WrapPanel>
         </Grid>
     </DockPanel>
 </Window>

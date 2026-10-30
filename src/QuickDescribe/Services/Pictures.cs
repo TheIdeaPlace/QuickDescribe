@@ -207,6 +207,36 @@ public static class Pictures
         return $"{name} {taken:yyyy-MM-dd HH.mm.ss}.png";
     }
 
+    /// <summary>A picture made ready for the clipboard: the slow part of copying it, so it can run off the UI thread. The
+    /// bitmap is 24-bit: a screen's 32-bit pixels have an unset fourth byte, which apps that read it as transparency
+    /// would paste as a blank picture.</summary>
+    public static (BitmapSource Bitmap, MemoryStream Png) ForClipboard(BitmapSource image)
+    {
+        var converted = new FormatConvertedBitmap(image, PixelFormats.Bgr24, null, 0);
+        var stride = (converted.PixelWidth * 3 + 3) / 4 * 4;
+        var pixels = new byte[stride * converted.PixelHeight];
+        converted.CopyPixels(pixels, stride, 0);
+        var bitmap = BitmapSource.Create(converted.PixelWidth, converted.PixelHeight, image.DpiX, image.DpiY, PixelFormats.Bgr24, null, pixels, stride);
+        bitmap.Freeze();
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(bitmap));
+        var png = new MemoryStream();
+        encoder.Save(png);
+        png.Position = 0;
+        return (bitmap, png);
+    }
+
+    /// <summary>What goes on the clipboard: the bitmap (what most apps paste; Windows offers it as a DIB too) and the PNG
+    /// (what browsers and Office prefer, and what Describe Clipboard reads first). Only those, without WPF's own
+    /// formats, so copying doesn't make more copies of a whole screen than apps use.</summary>
+    public static DataObject ClipboardData(BitmapSource bitmap, MemoryStream png)
+    {
+        var data = new DataObject();
+        data.SetData(DataFormats.Bitmap, bitmap, false);
+        data.SetData("PNG", png, false);
+        return data;
+    }
+
     /// <summary>Saves a picture as the file's extension says: JPEG for .jpg and .jpeg, PNG otherwise. Throws a
     /// <see cref="PictureException"/> with a readable message when it can't.</summary>
     public static void Save(BitmapSource image, string path)

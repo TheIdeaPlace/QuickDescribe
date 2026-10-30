@@ -207,6 +207,26 @@ public class PicturesTests : IDisposable
     }
 
     [Fact]
+    public async Task ClipboardData_HasTheScreenshotAsAnOpaqueBitmapAndAsPng_AtFullSize()
+    {
+        var shot = Drawn.Solid(301, 200, 10, 20, 200);
+        // Off the UI thread, as Copy Screenshot does it.
+        var (bitmap, png) = await Task.Run(() => Pictures.ForClipboard(shot), TestContext.Current.CancellationToken);
+        var data = Pictures.ClipboardData(bitmap, png);
+
+        Assert.Equal(["Bitmap", "PNG"], data.GetFormats(false).Order());
+        var copied = Assert.IsAssignableFrom<BitmapSource>(data.GetData(System.Windows.DataFormats.Bitmap));
+        Assert.Equal(System.Windows.Media.PixelFormats.Bgr24, copied.Format);
+        Assert.Equal((301, 200), (copied.PixelWidth, copied.PixelHeight));
+        var first = new byte[3];
+        copied.CopyPixels(new System.Windows.Int32Rect(0, 0, 1, 1), first, 3, 0);
+        Assert.Equal(new byte[] { 10, 20, 200 }, first);
+
+        var frame = BitmapDecoder.Create(Assert.IsType<MemoryStream>(data.GetData("PNG")), BitmapCreateOptions.None, BitmapCacheOption.OnLoad).Frames[0];
+        Assert.Equal((301, 200), (frame.PixelWidth, frame.PixelHeight));
+    }
+
+    [Fact]
     public void TheSaveFilter_OffersPngFirst()
     {
         Assert.StartsWith("PNG picture|*.png|", Pictures.SaveFilter);

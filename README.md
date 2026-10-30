@@ -40,11 +40,14 @@ In Quick Describe itself:
 | Ctrl+Comma | Opens Settings |
 | Ctrl+V | Describes the picture on the clipboard |
 | Ctrl+S | Saves the screenshot just described |
+| Ctrl+Shift+S | Copies the screenshot just described to the clipboard |
 | Ctrl+Shift+C | Copies the result |
 | F1 | Shows the keys |
 | Escape | Stops describing, and goes back to where you were |
 
 **File, Save Screenshot** (Ctrl+S, or the Save Screenshot button) saves the picture Quick Describe took of the screen, the active window or the focused item, as a PNG or JPEG file. It suggests a name that says what was taken and when, such as "Active window, Notepad 2026-10-30 14.05.12.png", in your Pictures folder the first time and then wherever you saved last. Your screen reader says "Saved" and the file's name. The screenshot is the one for the result showing: describing something else replaces it, and a clipboard picture or a picture file has none to save, since you have it already.
+
+**Edit, Copy Screenshot** (Ctrl+Shift+S, or the Copy Screenshot button) puts the same picture on the clipboard instead, to paste into an email, a document or a chat. Your screen reader says "Screenshot copied".
 
 You can also drop a picture file on the window. The Describe menu does the same as the hotkeys: it steps out of the way first, so it describes what's behind Quick Describe. **Describe, Description Type** chooses how much detail you get: Accessible (the default, written for people who are blind or have low vision), Detailed, Brief or Diagram. **Help, Check Windows AI** says whether your PC can describe pictures, and why not if it can't.
 
@@ -84,7 +87,7 @@ If your PC is a Copilot+ PC but Windows' AI features are turned off (Settings, P
 
 ## Privacy
 
-Pictures are described and read on your PC by Windows itself, and never sent anywhere. The screen is captured only when you press a hotkey or choose a command, and results aren't saved. Pictures aren't either, unless you choose File, Save Screenshot. Quick Describe keeps your settings, what its update checks found, and its log.
+Pictures are described and read on your PC by Windows itself, and never sent anywhere. The screen is captured only when you press a hotkey or choose a command, and results aren't saved. Pictures aren't either, unless you save or copy a screenshot. Quick Describe keeps your settings, what its update checks found, and its log.
 
 What goes over the internet:
 

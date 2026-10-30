@@ -46,6 +46,9 @@ public partial class MainWindow : Window
     /// <summary>Save Screenshot is under way: a result arriving meanwhile is held, and said after "Saved", not cut off by it.</summary>
     private bool _saving;
 
+    /// <summary>Copy Screenshot is getting the picture ready: a second press waits for this one.</summary>
+    private bool _copying;
+
     /// <summary>How long Windows takes to show the screen without Quick Describe once it's asked to leave it out of
     /// captures: a frame or two.</summary>
     private static readonly TimeSpan LeaveOutOfCapture = TimeSpan.FromMilliseconds(100);
@@ -550,7 +553,7 @@ public partial class MainWindow : Window
     }
 
     internal const string NoScreenshotText =
-        "There's no screenshot to save. Describe the screen, the active window or the focused item first, then save it.";
+        "There's no screenshot to save or copy. Describe the screen, the active window or the focused item first.";
 
     /// <summary>File > Save Screenshot: saves the picture the last description took of the screen, a window or the focused
     /// item. The result stays in the box; a problem is said in a message box rather than replacing it.</summary>
@@ -627,6 +630,52 @@ public partial class MainWindow : Window
             Announcer.Announce(saved);
         }
     }
+
+    /// <summary>Edit > Copy Screenshot: puts the picture the last description took on the clipboard, for pasting into an
+    /// email, a document or a chat.</summary>
+    private async void OnCopyScreenshot(object sender, RoutedEventArgs e)
+    {
+        if (_saving)
+        {
+            Announcer.Announce("Still saving the screenshot.");
+            return;
+        }
+        if (_dialogOpen || _copying) return;
+        if (_screenshot is not { } shot)
+        {
+            MessageBox.Show(this, NoScreenshotText, "Copy Screenshot", MessageBoxButton.OK, MessageBoxImage.Information);
+            ResultBox.Focus();
+            return;
+        }
+        _copying = true;
+        try
+        {
+            // Off the UI thread: a large screen takes a moment to convert and encode. The picture is frozen.
+            var (bitmap, png) = await Task.Run(() => Pictures.ForClipboard(shot.Picture.Image));
+            // Copied, not just offered: it stays on the clipboard after Quick Describe quits.
+            Clipboard.SetDataObject(Pictures.ClipboardData(bitmap, png), true);
+            Log.Write("copy", "Copied a screenshot");
+            Announcer.Announce("Screenshot copied");
+        }
+        catch (System.Runtime.InteropServices.COMException ex) when (ex.HResult == ClipboardCantOpen)
+        {
+            Log.Write("copy", "The clipboard was busy");
+            Announcer.Announce("The clipboard is busy. Try again.");
+        }
+        catch (Exception ex)
+        {
+            Log.Error("copy", "Copying a screenshot failed", ex);
+            MessageBox.Show(this, $"The screenshot couldn't be copied: {ex.Message.Trim()}", "Copy Screenshot", MessageBoxButton.OK, MessageBoxImage.Warning);
+            ResultBox.Focus();
+        }
+        finally
+        {
+            _copying = false;
+        }
+    }
+
+    /// <summary>CLIPBRD_E_CANT_OPEN: another app has the clipboard open.</summary>
+    private const int ClipboardCantOpen = unchecked((int)0x800401D0);
 
     private void OnExit(object sender, RoutedEventArgs e) => Exit();
 
@@ -721,6 +770,7 @@ public partial class MainWindow : Window
         "Ctrl+Comma opens Settings, for the hotkeys, the description type, starting with Windows and keeping running." + Environment.NewLine +
         "Ctrl+V describes the picture on the clipboard." + Environment.NewLine +
         "Ctrl+S saves the screenshot of the screen, window or focused item just described." + Environment.NewLine +
+        "Ctrl+Shift+S copies that screenshot to the clipboard." + Environment.NewLine +
         "Ctrl+Shift+C copies the result." + Environment.NewLine +
         "Escape stops describing, minimizes Quick Describe and goes back to where you were. The hotkeys keep working." + Environment.NewLine +
         (keepRunning
@@ -831,6 +881,11 @@ public partial class MainWindow : Window
         {
             e.Handled = true;
             OnSaveScreenshot(sender, e);
+        }
+        else if (e.Key == Key.S && modifiers == (ModifierKeys.Control | ModifierKeys.Shift))
+        {
+            e.Handled = true;
+            OnCopyScreenshot(sender, e);
         }
         else if (e.Key == Key.OemComma && modifiers == ModifierKeys.Control)
         {
