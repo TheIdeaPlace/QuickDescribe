@@ -109,7 +109,7 @@ dotnet build QuickDescribe.sln
 dotnet test --solution QuickDescribe.sln
 ```
 
-To use Windows AI from a development build on a Copilot+ PC, turn on Developer Mode, then register the helper: `.\scripts\build-ai-helper.ps1 -Register`. `quickdescribe-ai --check` should then say `"state":"Ready"`. The tests that need Windows AI run only where it's ready, and skip themselves elsewhere, CI included.
+To use Windows AI from a development build on a Copilot+ PC, turn on Developer Mode, then register the helper: `.\scripts\build-ai-helper.ps1 -Register`. `quickdescribe-ai --check` should then say `"state":"Ready"`. The tests that need Windows AI run only where it's ready, and skip themselves elsewhere, CI included. When you're done, `.\scripts\build-ai-helper.ps1 -Unregister` removes the registration. Always run it before deleting the folder: a registration whose folder is gone keeps the `quickdescribe-ai` command and breaks Windows AI.
 
 `.\scripts\build-msix.ps1` builds the installer. `-Sign` signs it with Kelly Ford's Azure Artifact Signing certificate. Releases are built and signed by `.github/workflows/release.yml` when a `v<version>` tag is pushed: see CLAUDE.md.
 

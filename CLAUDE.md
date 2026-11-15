@@ -17,9 +17,12 @@ From PowerShell or cmd, never Git Bash (the helper answers every picture with in
 dotnet build QuickDescribe.sln
 dotnet test --solution QuickDescribe.sln
 .\scripts\build-ai-helper.ps1 -Register   # Developer Mode; Windows AI in development builds
+.\scripts\build-ai-helper.ps1 -Unregister # undo it when done (builds nothing)
 ```
 
 After changing the helper (`src/QuickDescribeAI`), run `.\scripts\build-ai-helper.ps1 -Register` again: development builds and the live tests use the registered helper, not the one just built. An installed Quick Describe claims the same `quickdescribe-ai` command, so remove it (`Get-AppxPackage TheIdeaPlace.QuickDescribe | Remove-AppxPackage`) while working on the helper.
+
+**When you're done with the helper, run `.\scripts\build-ai-helper.ps1 -Unregister`, and reinstall Quick Describe if you removed it. Always do this before deleting the folder or worktree the registered build lives in.** A `-Register` registration runs from its build folder; if the folder goes, the registration stays behind with the `quickdescribe-ai` command and Windows AI fails with "The system cannot find the path specified". A stale registration of IDT's helper, from a worktree deleted a month earlier, broke Windows AI on Kelly's Surface in November 2026.
 
 Drawn text comes out blank when Windows' session has no display (Kelly's remote session disconnected), so the tests that draw text fail on this PC then; CI runs them.
 

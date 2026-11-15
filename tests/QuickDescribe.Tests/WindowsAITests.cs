@@ -5,6 +5,26 @@ namespace QuickDescribe.Tests;
 
 public class WindowsAITests
 {
+    [Theory]
+    [InlineData(2)]
+    [InlineData(3)]
+    public void AHelperCommandPointingNowhere_SaysHowToFixIt(int windowsError)
+    {
+        // A development registration whose folder was deleted keeps the command; Windows then
+        // reports only "The system cannot find the path specified".
+        var message = WindowsAI.StartFailureMessage(new System.ComponentModel.Win32Exception(windowsError));
+        Assert.Contains("points at a folder that no longer exists", message);
+        Assert.Contains("build-ai-helper.ps1 -Unregister", message);
+    }
+
+    [Fact]
+    public void OtherStartFailures_KeepTheirOwnMessage()
+    {
+        var message = WindowsAI.StartFailureMessage(new System.ComponentModel.Win32Exception(5, "Access is denied."));
+        Assert.EndsWith("didn't start: Access is denied.", message);
+        Assert.DoesNotContain("-Unregister", message);
+    }
+
     [Fact]
     public void ASuccess_GivesTheTrimmedDescription()
     {
