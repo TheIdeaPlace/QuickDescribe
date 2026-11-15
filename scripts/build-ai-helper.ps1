@@ -28,15 +28,18 @@ number). 0 to 65535.
 
 .PARAMETER Register
 Install the built layout for the current user (needs Developer Mode). The package then runs
-from out\ai\<arch> itself and claims the quickdescribe-ai command. Run -Unregister when you
+from out\ai\<arch> itself. The quickdescribe-ai command belongs to whichever package
+registered it first, so with Quick Describe installed it stays with the installed app (remove
+that first to test your build, as CLAUDE.md says); without it, this registration gets the
+command and keeps it even after Quick Describe is installed later. Run -Unregister when you
 are done, and always before deleting this folder or the worktree it is in: a registration
-whose folder is gone stays behind, keeps the command, and Windows AI then fails with "The
-system cannot find the path specified" (this happened to IDT's helper in November 2026).
+whose folder is gone stays behind, and if it owns the command, Windows AI then fails with
+"The system cannot find the path specified" (this happened to IDT's helper in November 2026).
 
 .PARAMETER Unregister
-Remove development registrations of the helper (the ones -Register makes). Builds nothing.
-An installed Quick Describe is left alone; if you removed it while working on the helper,
-install it again afterwards so its helper answers quickdescribe-ai.
+Remove development registrations of the helper (the ones -Register makes), then check that
+quickdescribe-ai answers. Builds nothing. An installed Quick Describe is left alone; if you
+removed it while working on the helper, install it again afterwards.
 
 .PARAMETER Pack
 Also pack the layout into artifacts\QuickDescribeAI_<arch>.msix.
@@ -78,8 +81,16 @@ if ($Unregister) {
         Remove-AppxPackage -Package $package.PackageFullName
         Write-Host "Removed the development registration $($package.PackageFullName) from $where"
     }
-    if (Get-AppxPackage -Name 'TheIdeaPlace.QuickDescribe') {
-        Write-Host 'quickdescribe-ai now runs the installed Quick Describe''s helper.'
+    # Check rather than assume: the command belongs to whichever package registered it first.
+    $alias = Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps\quickdescribe-ai.exe'
+    $state = $null
+    if (Test-Path -LiteralPath $alias) {
+        try { $state = (& $alias --check 2>$null | Select-Object -Last 1 | ConvertFrom-Json).state } catch { $state = $null }
+    }
+    if ($state) {
+        Write-Host "quickdescribe-ai answers ($state), from the installed Quick Describe."
+    } elseif (Get-AppxPackage -Name 'TheIdeaPlace.QuickDescribe') {
+        Write-Warning 'Quick Describe is installed but quickdescribe-ai does not answer. Reinstall Quick Describe.'
     } else {
         Write-Host 'Quick Describe isn''t installed; install it again to get its helper back.'
     }
@@ -137,8 +148,16 @@ if ($Pack) {
 
 if ($Register) {
     Add-AppxPackage -Register (Join-Path $out 'AppxManifest.xml') -ForceUpdateFromAnyVersion
-    Write-Host 'Registered for this user. Try: quickdescribe-ai --check'
-    Write-Warning ("$out is now registered as the Windows AI helper and has the quickdescribe-ai " +
-        "command. Run .\scripts\build-ai-helper.ps1 -Unregister when you are done, and before " +
-        "deleting this folder or its worktree; otherwise Quick Describe's Windows AI stops working.")
+    Write-Host "Registered $packageVersion for this user."
+    # The command belongs to whichever package registered it first, so say which one answers:
+    # with Quick Describe installed, it is still the installed app's helper, not this build.
+    $alias = Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps\quickdescribe-ai.exe'
+    try { $answer = (& $alias --check 2>$null | Select-Object -Last 1 | ConvertFrom-Json).version } catch { $answer = $null }
+    if ($answer) {
+        Write-Host "quickdescribe-ai answers with version $answer$(if ($packageVersion -notlike "$answer*") { ' (not this build: remove the installed Quick Describe to test it)' })."
+    }
+    Write-Warning ("$out is now registered as a Windows AI helper. Run " +
+        ".\scripts\build-ai-helper.ps1 -Unregister when you are done, and before deleting this " +
+        "folder or its worktree: if this registration owns the quickdescribe-ai command, Quick " +
+        "Describe's Windows AI stops working once the folder is gone.")
 }
