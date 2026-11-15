@@ -5,6 +5,41 @@ namespace QuickDescribe.Tests;
 
 public class WindowsAITests
 {
+    [Theory]
+    [InlineData(2)]
+    [InlineData(3)]
+    public void ADevelopmentCommandPointingNowhere_SaysHowToFixIt(int windowsError)
+    {
+        // A development registration whose folder was deleted keeps the command; Windows then
+        // reports only "The system cannot find the path specified".
+        var message = WindowsAI.StartFailureMessage(new System.ComponentModel.Win32Exception(windowsError), installedCopy: false);
+        Assert.Contains("points at a folder that no longer exists", message);
+        Assert.Contains("build-ai-helper.ps1 -Unregister", message);
+    }
+
+    [Theory]
+    [InlineData(2)]
+    [InlineData(3)]
+    public void AnInstalledCopyMissingItsHelper_SaysReinstall_WithoutDeveloperTalk(int windowsError)
+    {
+        // An installed Quick Describe starts the helper inside its own package; its users have no
+        // build scripts, so they hear only what to do.
+        var message = WindowsAI.StartFailureMessage(new System.ComponentModel.Win32Exception(windowsError), installedCopy: true);
+        Assert.EndsWith("Reinstall Quick Describe.", message);
+        Assert.DoesNotContain("-Unregister", message);
+        Assert.DoesNotContain("development", message);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void OtherStartFailures_KeepTheirOwnMessage(bool installedCopy)
+    {
+        var message = WindowsAI.StartFailureMessage(new System.ComponentModel.Win32Exception(5, "Access is denied."), installedCopy);
+        Assert.EndsWith("didn't start: Access is denied.", message);
+        Assert.DoesNotContain("-Unregister", message);
+    }
+
     [Fact]
     public void ASuccess_GivesTheTrimmedDescription()
     {
