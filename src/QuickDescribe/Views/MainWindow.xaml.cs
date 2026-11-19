@@ -303,6 +303,7 @@ public partial class MainWindow : Window
             [Target.Window] = "describe the active window",
             [Target.Focus] = "describe the item with focus",
             [Target.Clipboard] = "describe a picture on the clipboard",
+            [Target.Camera] = "take a picture with the camera and describe it",
         };
         var on = HotKeyMap.Targets.Where(t => map.LetterFor(t) is not null).ToList();
         var keys = on.Count == 0
@@ -333,7 +334,7 @@ public partial class MainWindow : Window
         }
         var foreground = Native.GetForegroundWindow();
         // Pressed in Quick Describe itself: describe what's behind it, as the Describe menu does.
-        if (foreground == _handle && target != Target.Clipboard)
+        if (foreground == _handle && OfTheScreen(target))
         {
             _ = DescribeBehindAsync(target);
             return;
@@ -362,15 +363,27 @@ public partial class MainWindow : Window
         return _requests.Start();
     }
 
+    /// <summary>Whether a command takes a picture of the screen, which Quick Describe has to keep out of.</summary>
+    private static bool OfTheScreen(Target target) => target is Target.Screen or Target.Window or Target.Focus;
+
     private async Task DescribeAsync(Target target, IntPtr foreground)
     {
         var request = StartRequest();
         Picture? picture;
         string? problem;
+        if (target == Target.Camera)
+        {
+            // The camera takes a second or two to settle, and the first time Windows asks whether Quick Describe may use
+            // it: in front and saying so meanwhile, rather than silent behind another app.
+            BringToFront();
+            _describing = "the camera";
+            Title = $"Camera - {AppInfo.Name}";
+            ShowMessage("Taking a picture with the camera…", null);
+        }
         // Quick Describe still showing (switched away from without Escape) is left out of its own picture, which would
         // otherwise read its last result back as part of the screen. Only for the moment of taking it: left out all the
         // time, it would be missing from screen sharing and other people's screenshots too.
-        var hide = target != Target.Clipboard && IsVisible && WindowState != WindowState.Minimized &&
+        var hide = OfTheScreen(target) && IsVisible && WindowState != WindowState.Minimized &&
                    Native.SetWindowDisplayAffinity(_handle, Native.WDA_EXCLUDEFROMCAPTURE);
         try
         {
@@ -380,8 +393,13 @@ public partial class MainWindow : Window
                 Target.Screen => (ScreenCapture.Screen(foreground), null),
                 Target.Window => ScreenCapture.Window(foreground),
                 Target.Focus => await ScreenCapture.FocusAsync(foreground),
+                Target.Camera => (await Camera.TakeAsync(request.Token), null),
                 _ => (Pictures.FromClipboard(), null),
             };
+        }
+        catch (OperationCanceledException) when (request.Token.IsCancellationRequested)
+        {
+            return; // given up while the camera settled, by Escape or a newer request
         }
         catch (PictureException ex)
         {
@@ -398,12 +416,23 @@ public partial class MainWindow : Window
             if (hide) Native.SetWindowDisplayAffinity(_handle, Native.WDA_NONE);
         }
         if (!_requests.IsCurrent(request)) return;
-        BringToFront();
+        // The camera's picture came up in front already: switched away from while it settled, it doesn't pull you back.
+        if (target != Target.Camera) BringToFront();
         if (picture is null)
         {
             _requests.Finish(request);
             _describing = null;
-            ShowMessage(problem ?? "Nothing to describe.", null);
+            if (target == Target.Camera && !IsActive)
+            {
+                // Switched away from while the camera started: said on return, as a result would be, not over that app.
+                Title = $"Camera - {AppInfo.Name}";
+                ResultBox.Text = problem ?? "Nothing to describe.";
+                _unspoken = (ResultBox.Text, false);
+            }
+            else
+            {
+                ShowMessage(problem ?? "Nothing to describe.", null);
+            }
         }
         else
         {
@@ -487,6 +516,12 @@ public partial class MainWindow : Window
     private void OnWindow(object sender, RoutedEventArgs e) => _ = DescribeBehindAsync(Target.Window);
     private void OnFocus(object sender, RoutedEventArgs e) => _ = DescribeBehindAsync(Target.Focus);
 
+    private void OnCamera(object sender, RoutedEventArgs e)
+    {
+        _returnTo = IntPtr.Zero;
+        _ = DescribeAsync(Target.Camera, IntPtr.Zero);
+    }
+
     private void OnClipboard(object sender, RoutedEventArgs e)
     {
         _returnTo = IntPtr.Zero;
@@ -553,10 +588,10 @@ public partial class MainWindow : Window
     }
 
     internal const string NoScreenshotText =
-        "There's no screenshot to save or copy. Describe the screen, the active window or the focused item first.";
+        "There's no screenshot to save or copy. Describe the screen, the active window, the focused item or the camera first.";
 
-    /// <summary>File > Save Screenshot: saves the picture the last description took of the screen, a window or the focused
-    /// item. The result stays in the box; a problem is said in a message box rather than replacing it.</summary>
+    /// <summary>File > Save Screenshot: saves the picture the last description took of the screen, a window, the focused
+    /// item or the camera. The result stays in the box; a problem is said in a message box rather than replacing it.</summary>
     private async void OnSaveScreenshot(object sender, RoutedEventArgs e)
     {
         if (_dialogOpen) return;
@@ -697,6 +732,7 @@ public partial class MainWindow : Window
         ScreenItem.InputGestureText = map.GestureFor(Target.Screen) ?? "";
         WindowItem.InputGestureText = map.GestureFor(Target.Window) ?? "";
         FocusItem.InputGestureText = map.GestureFor(Target.Focus) ?? "";
+        CameraItem.InputGestureText = map.GestureFor(Target.Camera) ?? "";
         ClipboardItem.InputGestureText = map.GestureFor(Target.Clipboard) is { } clipboard ? $"Ctrl+V, or {clipboard}" : "Ctrl+V";
     }
 
@@ -769,7 +805,7 @@ public partial class MainWindow : Window
         "Ctrl+O opens a picture file." + Environment.NewLine +
         "Ctrl+Comma opens Settings, for the hotkeys, the description type, starting with Windows and keeping running." + Environment.NewLine +
         "Ctrl+V describes the picture on the clipboard." + Environment.NewLine +
-        "Ctrl+S saves the screenshot of the screen, window or focused item just described." + Environment.NewLine +
+        "Ctrl+S saves the screenshot of the screen, window, focused item or camera just described." + Environment.NewLine +
         "Ctrl+Shift+S copies that screenshot to the clipboard." + Environment.NewLine +
         "Ctrl+Shift+C copies the result." + Environment.NewLine +
         "Escape stops describing, minimizes Quick Describe and goes back to where you were. The hotkeys keep working." + Environment.NewLine +

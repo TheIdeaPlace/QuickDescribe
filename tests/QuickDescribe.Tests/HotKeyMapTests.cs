@@ -6,18 +6,19 @@ namespace QuickDescribe.Tests;
 /// <summary>The hotkeys as chosen in Settings: the keys held, each command's letter, and what's refused.</summary>
 public class HotKeyMapTests
 {
-    private static HotKeyMap Map(KeyModifiers modifiers, char? screen = 'S', char? window = 'W', char? focus = 'F', char? clipboard = 'V') =>
+    private static HotKeyMap Map(KeyModifiers modifiers, char? screen = 'S', char? window = 'W', char? focus = 'F', char? clipboard = 'V',
+        char? camera = 'M') =>
         new(modifiers, new Dictionary<Target, char?>
         {
-            [Target.Screen] = screen, [Target.Window] = window, [Target.Focus] = focus, [Target.Clipboard] = clipboard,
+            [Target.Screen] = screen, [Target.Window] = window, [Target.Focus] = focus, [Target.Clipboard] = clipboard, [Target.Camera] = camera,
         });
 
     [Fact]
-    public void TheDefaults_AreCtrlAltShift_WithSWFV()
+    public void TheDefaults_AreCtrlAltShift_WithSWFVM()
     {
         var map = HotKeyMap.Default;
         Assert.Equal("Ctrl+Alt+Shift", map.ModifierText);
-        Assert.Equal(["Ctrl+Alt+Shift+S", "Ctrl+Alt+Shift+W", "Ctrl+Alt+Shift+F", "Ctrl+Alt+Shift+V"],
+        Assert.Equal(["Ctrl+Alt+Shift+S", "Ctrl+Alt+Shift+W", "Ctrl+Alt+Shift+F", "Ctrl+Alt+Shift+V", "Ctrl+Alt+Shift+M"],
             HotKeyMap.Targets.Select(map.GestureFor));
         Assert.Empty(map.Problems());
     }
@@ -39,14 +40,14 @@ public class HotKeyMapTests
     public void KeysOtherAppsUse_AreNamedWithWhatTheyCost_BeforeTheyreKept()
     {
         Assert.Null(HotKeyMap.Default.ConflictWarning());
-        var ctrlShift = Map(KeyModifiers.Ctrl | KeyModifiers.Shift, window: null, focus: null, clipboard: null) with { AllowConflicts = true };
+        var ctrlShift = Map(KeyModifiers.Ctrl | KeyModifiers.Shift, window: null, focus: null, clipboard: null, camera: null) with { AllowConflicts = true };
         Assert.Equal("While Quick Describe runs, Ctrl+Shift+S will describe in every app, instead of what those keys do there " +
                      "(Ctrl+Shift+S is Save As, and Ctrl+Shift+V pastes as plain text, in many apps). Use them anyway?", ctrlShift.ConflictWarning());
         // Alt alone with F, D, E or H also takes Quick Describe's own menus.
         Assert.Contains("Quick Describe's own menus too", (Map(KeyModifiers.Alt) with { AllowConflicts = true }).ConflictWarning());
         Assert.DoesNotContain("own menus", (Map(KeyModifiers.Alt, 'Q', 'Z', 'X', 'Y') with { AllowConflicts = true }).ConflictWarning());
         // No hotkeys at all: nothing to warn about.
-        Assert.Null(Map(KeyModifiers.Ctrl, null, null, null, null).ConflictWarning());
+        Assert.Null(Map(KeyModifiers.Ctrl, null, null, null, null, null).ConflictWarning());
     }
 
     [Theory]
@@ -119,12 +120,12 @@ public class HotKeyMapTests
     [Fact]
     public void ACommandWithNoLetter_HasNoHotkey_AndThat_IsFine()
     {
-        var map = Map(KeyModifiers.Ctrl | KeyModifiers.Alt, window: null, clipboard: null);
+        var map = Map(KeyModifiers.Ctrl | KeyModifiers.Alt, window: null, clipboard: null, camera: null);
         Assert.Empty(map.Problems());
         Assert.Null(map.GestureFor(Target.Window));
         Assert.Equal("Screen, Ctrl+Alt+S. Focused item, Ctrl+Alt+F.", SettingsWindow.Summary(map));
         Assert.Equal("No hotkeys: the Describe and File menus still do everything.",
-            SettingsWindow.Summary(Map(KeyModifiers.Ctrl | KeyModifiers.Alt, null, null, null, null)));
+            SettingsWindow.Summary(Map(KeyModifiers.Ctrl | KeyModifiers.Alt, null, null, null, null, null)));
     }
 
     [Fact]
@@ -162,13 +163,33 @@ public class HotKeyMapTests
     }
 
     [Fact]
+    public void SettingsFromBeforeTheCamera_GiveItItsDefaultLetter_UnlessItsTaken()
+    {
+        const int ctrlAlt = (int)(KeyModifiers.Ctrl | KeyModifiers.Alt);
+        var before = new Dictionary<string, string> { ["Screen"] = "Q", ["Window"] = "W", ["Focus"] = "", ["Clipboard"] = "V" };
+        var map = HotKeyMap.FromSettings(ctrlAlt, before);
+        Assert.Equal("Ctrl+Alt+M", map.GestureFor(Target.Camera));
+        Assert.Equal("Ctrl+Alt+Q", map.GestureFor(Target.Screen));
+        Assert.Null(map.GestureFor(Target.Focus));
+        // M chosen for something else: the camera has none, rather than the whole map going back to the defaults.
+        map = HotKeyMap.FromSettings(ctrlAlt, new Dictionary<string, string>(before) { ["Screen"] = "M" });
+        Assert.Equal("Ctrl+Alt+M", map.GestureFor(Target.Screen));
+        Assert.Null(map.GestureFor(Target.Camera));
+        // Held with keys other apps use, or the Windows key: none, rather than taking Ctrl+Shift+M or Windows+M unasked.
+        Assert.Null(HotKeyMap.FromSettings((int)(KeyModifiers.Ctrl | KeyModifiers.Shift), before, allowConflicts: true).GestureFor(Target.Camera));
+        Assert.Null(HotKeyMap.FromSettings((int)KeyModifiers.Windows, before).GestureFor(Target.Camera));
+        // Turned off on purpose, it stays off.
+        Assert.Null(HotKeyMap.FromSettings(ctrlAlt, new Dictionary<string, string>(before) { ["Camera"] = "" }).GestureFor(Target.Camera));
+    }
+
+    [Fact]
     public void TheWelcome_SaysTheHotkeysAsTheyreSet()
     {
         var text = MainWindow.Welcome(Map(KeyModifiers.Ctrl | KeyModifiers.Windows, screen: 'Q', clipboard: null));
         Assert.StartsWith("From any app, press Ctrl+Windows with:" + Environment.NewLine + "Q to describe the screen,", text);
         Assert.Contains("File, Settings sets the others.", text);
         Assert.DoesNotContain("clipboard.", text.Split(Environment.NewLine + Environment.NewLine)[0]);
-        Assert.StartsWith("No hotkeys are set", MainWindow.Welcome(Map(KeyModifiers.Ctrl | KeyModifiers.Alt, null, null, null, null)));
+        Assert.StartsWith("No hotkeys are set", MainWindow.Welcome(Map(KeyModifiers.Ctrl | KeyModifiers.Alt, null, null, null, null, null)));
     }
 
     [Fact]

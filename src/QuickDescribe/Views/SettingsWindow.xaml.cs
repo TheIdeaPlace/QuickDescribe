@@ -52,7 +52,7 @@ public partial class SettingsWindow : Window
         Loaded += (_, _) => CtrlBox.Focus();
     }
 
-    private ComboBox[] Keys => [ScreenKey, WindowKey, FocusKey, ClipboardKey];
+    private ComboBox[] Keys => [ScreenKey, WindowKey, FocusKey, ClipboardKey, CameraKey];
 
     private ComboBox KeyFor(Target target) => Keys[Array.IndexOf(HotKeyMap.Targets, target)];
 

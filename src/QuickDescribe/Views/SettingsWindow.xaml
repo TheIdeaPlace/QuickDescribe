@@ -29,7 +29,7 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <Grid.RowDefinitions>
-                        <RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition />
+                        <RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition />
                     </Grid.RowDefinitions>
                     <Label Grid.Row="0" Content="_Screen:" Target="{Binding ElementName=ScreenKey}" />
                     <ComboBox x:Name="ScreenKey" AutomationProperties.Name="Screen" Grid.Row="0" Grid.Column="1" Margin="0,2" SelectionChanged="Changed" />
@@ -39,6 +39,8 @@
                     <ComboBox x:Name="FocusKey" AutomationProperties.Name="Focused item" Grid.Row="2" Grid.Column="1" Margin="0,2" SelectionChanged="Changed" />
                     <Label Grid.Row="3" Content="C_lipboard picture:" Target="{Binding ElementName=ClipboardKey}" />
                     <ComboBox x:Name="ClipboardKey" AutomationProperties.Name="Clipboard picture" Grid.Row="3" Grid.Column="1" Margin="0,2" SelectionChanged="Changed" />
+                    <Label Grid.Row="4" Content="Ca_mera:" Target="{Binding ElementName=CameraKey}" />
+                    <ComboBox x:Name="CameraKey" AutomationProperties.Name="Camera" Grid.Row="4" Grid.Column="1" Margin="0,2" SelectionChanged="Changed" />
                 </Grid>
                 <!-- What the choices add up to, or what's wrong with them. Read with OK (its help text) as well. -->
                 <TextBlock x:Name="SummaryText" TextWrapping="Wrap" Margin="0,8,0,0" />

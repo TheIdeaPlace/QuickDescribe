@@ -24,6 +24,7 @@
                 <MenuItem x:Name="ScreenItem" Header="_Screen" Click="OnScreen" />
                 <MenuItem x:Name="WindowItem" Header="Active _Window" Click="OnWindow" />
                 <MenuItem x:Name="FocusItem" Header="_Focused Item" Click="OnFocus" />
+                <MenuItem x:Name="CameraItem" Header="_Camera" Click="OnCamera" />
                 <Separator />
                 <MenuItem x:Name="KindMenu" Header="Description _Type" />
             </MenuItem>
@@ -60,6 +61,7 @@
             <!-- Wraps, so no button is cut off in a narrow window or with large text. -->
             <WrapPanel Grid.Row="2" Orientation="Horizontal" Margin="8">
                 <Button Content="Describe _Clipboard" Padding="10,4" Margin="0,0,8,0" Click="OnClipboard" />
+                <Button Content="Describe C_amera" Padding="10,4" Margin="0,0,8,0" Click="OnCamera" />
                 <Button Content="_Open Picture…" Padding="10,4" Margin="0,0,8,0" Click="OnOpen" />
                 <Button Content="_Save Screenshot…" Padding="10,4" Margin="0,0,8,0" Click="OnSaveScreenshot" />
                 <Button Content="Cop_y Screenshot" Padding="10,4" Margin="0,0,8,0" Click="OnCopyScreenshot" />

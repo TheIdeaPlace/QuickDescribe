@@ -71,5 +71,7 @@
   <Capabilities>
     <rescap:Capability Name="runFullTrust" />
     <systemai:Capability Name="systemAIModels" />
+    <!-- Describe, Camera. Windows asks the person the first time; Settings, Privacy & security, Camera turns it off. -->
+    <DeviceCapability Name="webcam" />
   </Capabilities>
 </Package>

@@ -9,6 +9,7 @@ public enum Target
     Window,
     Focus,
     Clipboard,
+    Camera,
 }
 
 /// <summary>The keys held with a hotkey's letter. The values are Win32's MOD_ flags.</summary>
@@ -30,10 +31,10 @@ public enum KeyModifiers
 public sealed record HotKeyMap(KeyModifiers Modifiers, IReadOnlyDictionary<Target, char?> Letters, bool AllowConflicts = false)
 {
     public static readonly HotKeyMap Default = new(KeyModifiers.Ctrl | KeyModifiers.Alt | KeyModifiers.Shift,
-        new Dictionary<Target, char?> { [Target.Screen] = 'S', [Target.Window] = 'W', [Target.Focus] = 'F', [Target.Clipboard] = 'V' });
+        new Dictionary<Target, char?> { [Target.Screen] = 'S', [Target.Window] = 'W', [Target.Focus] = 'F', [Target.Clipboard] = 'V', [Target.Camera] = 'M' });
 
     /// <summary>The commands, in the order they're listed everywhere.</summary>
-    public static readonly Target[] Targets = [Target.Screen, Target.Window, Target.Focus, Target.Clipboard];
+    public static readonly Target[] Targets = [Target.Screen, Target.Window, Target.Focus, Target.Clipboard, Target.Camera];
 
     /// <summary>What each command is called, as in the Describe and File menus.</summary>
     public static string Title(Target target) => target switch
@@ -41,6 +42,7 @@ public sealed record HotKeyMap(KeyModifiers Modifiers, IReadOnlyDictionary<Targe
         Target.Screen => "Screen",
         Target.Window => "Active window",
         Target.Focus => "Focused item",
+        Target.Camera => "Camera",
         _ => "Clipboard picture",
     };
 
@@ -131,9 +133,16 @@ public sealed record HotKeyMap(KeyModifiers Modifiers, IReadOnlyDictionary<Targe
     private static HotKeyMap? Read(int? modifiers, IReadOnlyDictionary<string, string>? letters)
     {
         if (modifiers is null || letters is null) return null;
-        return new HotKeyMap((KeyModifiers)modifiers.Value & (KeyModifiers.Alt | KeyModifiers.Ctrl | KeyModifiers.Shift | KeyModifiers.Windows),
-            Targets.ToDictionary(t => t, t => letters.TryGetValue(t.ToString(), out var l) && l.Trim() is { Length: 1 } one
-                ? char.ToUpperInvariant(one[0]) : (char?)null));
+        var held = (KeyModifiers)modifiers.Value & (KeyModifiers.Alt | KeyModifiers.Ctrl | KeyModifiers.Shift | KeyModifiers.Windows);
+        var read = Targets.Where(t => letters.ContainsKey(t.ToString())).ToDictionary(t => t,
+            t => letters[t.ToString()].Trim() is { Length: 1 } one ? char.ToUpperInvariant(one[0]) : (char?)null);
+        // A command newer than the settings (Camera, in settings saved by 0.1.3 and earlier) gets its default letter
+        // when that can't take another app's key: held with Ctrl and Alt, and no other command has it. With other keys
+        // (Ctrl+Shift+M is New Message in Outlook, Windows+M minimizes everything) it has none until it's chosen.
+        var safe = held.HasFlag(KeyModifiers.Ctrl) && held.HasFlag(KeyModifiers.Alt);
+        foreach (var target in Targets.Where(t => !read.ContainsKey(t)))
+            read[target] = safe && Default.LetterFor(target) is { } letter && !read.ContainsValue(letter) ? letter : null;
+        return new HotKeyMap(held, read);
     }
 
     /// <summary>"A, B and C".</summary>
