@@ -23,7 +23,7 @@ After changing the helper (`src/QuickDescribeAI`), run `.\scripts\build-ai-helpe
 
 Drawn text comes out blank when Windows' session has no display (Kelly's remote session disconnected), so the tests that draw text fail on this PC then; CI runs them.
 
-`QD_SCREEN_TRIAL=1` runs `ScreenTrialTests`, which captures this PC's real screen, window and focused item and prints only outcomes and timings. `QD_CAMERA_TRIAL=1` runs `CameraTrialTests`, which takes one real camera picture and describes it. From a remote session the camera answers Access is denied, though camera access is allowed (19 Nov 2026), so it's tried at the PC itself.
+`QD_SCREEN_TRIAL=1` runs `ScreenTrialTests`, which captures this PC's real screen, window and focused item and prints only outcomes and timings. `QD_CAMERA_TRIAL=1` runs `CameraTrialTests`, which takes one real camera picture and describes it. While the PC is locked the camera answers Access is denied, though camera access is allowed (19 Nov 2026); unlocked, it took a 1920x1080 picture in 1.1 s.
 
 Windows AI needs the Copilot+ NPU, which the vmtest VMs don't have, so this app is tested on Kelly's PC (Kelly, 15 Oct 2026). Keep such runs short and close what you open.
 
