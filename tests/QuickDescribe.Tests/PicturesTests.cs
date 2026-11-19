@@ -196,7 +196,21 @@ public class PicturesTests : IDisposable
         Assert.Equal(10, Pictures.FromFile(camera).Image.PixelWidth);
         // A picture file is marked as one, so Save everything leaves it out; its name loses its own extension.
         Assert.True(Pictures.FromFile(camera).IsFile);
+        // Renamed for where it came from (a file copied to the clipboard), it's still a file.
+        Assert.True((Pictures.FromFile(camera) with { Source = "Clipboard, photo.jpg" }).IsFile);
         Assert.Equal("Clipboard, photo 2026-10-30 14.05.12.png", Pictures.ScreenshotName("Clipboard, photo.jpg", Taken));
+    }
+
+    [Fact]
+    public void SaveDescribedImage_SuggestsJpegForTheCamera_AndPngForTheRest()
+    {
+        Assert.Equal(".jpg", Pictures.ExtensionFor("Camera"));
+        Assert.Equal(".jpg", Pictures.ExtensionFor("Camera, Integrated Camera"));
+        Assert.Equal(2, Pictures.SaveFilterIndexFor("Camera"));
+        Assert.Equal(".png", Pictures.ExtensionFor("Screen"));
+        Assert.Equal(1, Pictures.SaveFilterIndexFor("Active window, Notepad"));
+        // The filter's second type is JPEG.
+        Assert.StartsWith("JPEG", Pictures.SaveFilter.Split('|')[2]);
     }
 
     [Fact]

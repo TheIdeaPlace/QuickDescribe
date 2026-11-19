@@ -165,21 +165,23 @@ public class HotKeyMapTests
     [Fact]
     public void SettingsFromBeforeTheCamera_GiveItItsDefaultLetter_UnlessItsTaken()
     {
-        const int ctrlAlt = (int)(KeyModifiers.Ctrl | KeyModifiers.Alt);
+        const int ctrlAltShift = (int)(KeyModifiers.Ctrl | KeyModifiers.Alt | KeyModifiers.Shift);
         var before = new Dictionary<string, string> { ["Screen"] = "Q", ["Window"] = "W", ["Focus"] = "", ["Clipboard"] = "V" };
-        var map = HotKeyMap.FromSettings(ctrlAlt, before);
-        Assert.Equal("Ctrl+Alt+M", map.GestureFor(Target.Camera));
-        Assert.Equal("Ctrl+Alt+Q", map.GestureFor(Target.Screen));
+        var map = HotKeyMap.FromSettings(ctrlAltShift, before);
+        Assert.Equal("Ctrl+Alt+Shift+M", map.GestureFor(Target.Camera));
+        Assert.Equal("Ctrl+Alt+Shift+Q", map.GestureFor(Target.Screen));
         Assert.Null(map.GestureFor(Target.Focus));
         // M chosen for something else: the camera has none, rather than the whole map going back to the defaults.
-        map = HotKeyMap.FromSettings(ctrlAlt, new Dictionary<string, string>(before) { ["Screen"] = "M" });
-        Assert.Equal("Ctrl+Alt+M", map.GestureFor(Target.Screen));
+        map = HotKeyMap.FromSettings(ctrlAltShift, new Dictionary<string, string>(before) { ["Screen"] = "M" });
+        Assert.Equal("Ctrl+Alt+Shift+M", map.GestureFor(Target.Screen));
         Assert.Null(map.GestureFor(Target.Camera));
+        // Ctrl+Alt alone is AltGr on many keyboards (AltGr+M types µ on a German one): none, rather than taking a character.
+        Assert.Null(HotKeyMap.FromSettings((int)(KeyModifiers.Ctrl | KeyModifiers.Alt), before).GestureFor(Target.Camera));
         // Held with keys other apps use, or the Windows key: none, rather than taking Ctrl+Shift+M or Windows+M unasked.
         Assert.Null(HotKeyMap.FromSettings((int)(KeyModifiers.Ctrl | KeyModifiers.Shift), before, allowConflicts: true).GestureFor(Target.Camera));
         Assert.Null(HotKeyMap.FromSettings((int)KeyModifiers.Windows, before).GestureFor(Target.Camera));
         // Turned off on purpose, it stays off.
-        Assert.Null(HotKeyMap.FromSettings(ctrlAlt, new Dictionary<string, string>(before) { ["Camera"] = "" }).GestureFor(Target.Camera));
+        Assert.Null(HotKeyMap.FromSettings(ctrlAltShift, new Dictionary<string, string>(before) { ["Camera"] = "" }).GestureFor(Target.Camera));
     }
 
     [Fact]

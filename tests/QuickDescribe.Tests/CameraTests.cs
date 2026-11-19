@@ -44,6 +44,58 @@ public class CameraTests
         for (var i = 0; i < pixels; i++) green[i * 4 + 1] = 255;
         Assert.Equal(0.587, Camera.Brightness(green, pixels), 3);
     }
+
+    [Fact]
+    public void OnlyFormatsTheFrameReaderCanRead_AreChosen()
+    {
+        Assert.True(Camera.IsReadable("NV12"));
+        Assert.True(Camera.IsReadable("MJPG"));
+        Assert.True(Camera.IsReadable("yuy2"));
+        Assert.False(Camera.IsReadable("H264"));
+        Assert.False(Camera.IsReadable(""));
+    }
+
+    private sealed class Owned : IDisposable
+    {
+        public bool Disposed;
+        public void Dispose() => Disposed = true;
+    }
+
+    [Fact]
+    public async Task AStartThatNeverFinishes_GivesUpWithAMessage_AndIsTurnedOffIfItFinishesLater()
+    {
+        var never = new TaskCompletionSource<Owned>();
+        var ex = await Assert.ThrowsAsync<PictureException>(() =>
+            Camera.WithinAsync(never.Task, TimeSpan.FromMilliseconds(50), TestContext.Current.CancellationToken, o => o.Dispose()));
+        Assert.Equal(Camera.StuckText, ex.Message);
+        var late = new Owned();
+        never.SetResult(late);
+        for (var i = 0; i < 100 && !late.Disposed; i++) await Task.Delay(10, TestContext.Current.CancellationToken);
+        Assert.True(late.Disposed);
+    }
+
+    [Fact]
+    public async Task AStart_IsGivenUp_WhenCancelled_AndIsTurnedOffIfItFinishesLater()
+    {
+        var pending = new TaskCompletionSource<Owned>();
+        using var cancel = new CancellationTokenSource();
+        var waiting = Camera.WithinAsync(pending.Task, TimeSpan.FromMinutes(1), cancel.Token, o => o.Dispose());
+        cancel.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => waiting);
+        var late = new Owned();
+        pending.SetResult(late);
+        for (var i = 0; i < 100 && !late.Disposed; i++) await Task.Delay(10, TestContext.Current.CancellationToken);
+        Assert.True(late.Disposed);
+    }
+
+    [Fact]
+    public async Task AStartThatFinishesInTime_IsReturned_AndNotTurnedOff()
+    {
+        var owned = new Owned();
+        var got = await Camera.WithinAsync(Task.FromResult(owned), TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken, o => o.Dispose());
+        Assert.Same(owned, got);
+        Assert.False(owned.Disposed);
+    }
 }
 
 /// <summary>Takes a real picture with this PC's camera and describes it. Only when QD_CAMERA_TRIAL=1: it turns the

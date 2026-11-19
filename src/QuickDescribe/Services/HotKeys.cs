@@ -137,9 +137,10 @@ public sealed record HotKeyMap(KeyModifiers Modifiers, IReadOnlyDictionary<Targe
         var read = Targets.Where(t => letters.ContainsKey(t.ToString())).ToDictionary(t => t,
             t => letters[t.ToString()].Trim() is { Length: 1 } one ? char.ToUpperInvariant(one[0]) : (char?)null);
         // A command newer than the settings (Camera, in settings saved by 0.1.3 and earlier) gets its default letter
-        // when that can't take another app's key: held with Ctrl and Alt, and no other command has it. With other keys
-        // (Ctrl+Shift+M is New Message in Outlook, Windows+M minimizes everything) it has none until it's chosen.
-        var safe = held.HasFlag(KeyModifiers.Ctrl) && held.HasFlag(KeyModifiers.Alt);
+        // when that can't take another app's key or a typed character: held with Ctrl, Alt and Shift, and no other command
+        // has it. With other keys it has none until it's chosen: Ctrl+Shift+M is New Message in Outlook, Windows+M
+        // minimizes everything, and Ctrl+Alt is AltGr on many keyboards (AltGr+M types µ on a German one).
+        var safe = held.HasFlag(KeyModifiers.Ctrl) && held.HasFlag(KeyModifiers.Alt) && held.HasFlag(KeyModifiers.Shift);
         foreach (var target in Targets.Where(t => !read.ContainsKey(t)))
             read[target] = safe && Default.LetterFor(target) is { } letter && !read.ContainsValue(letter) ? letter : null;
         return new HotKeyMap(held, read);

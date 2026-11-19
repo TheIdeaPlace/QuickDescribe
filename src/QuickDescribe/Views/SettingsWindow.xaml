@@ -59,8 +59,15 @@
                  Text="Starting when you sign in to Windows isn't available in this copy. It needs Quick Describe installed from its releases page." />
         <CheckBox x:Name="KeepRunningBox" Content="_Keep running in the notification area when I close the window" Margin="0,8,0,0"
                   AutomationProperties.HelpText="Closing the window, with Alt+F4 or its Close button, leaves the hotkeys working. File, Exit quits." />
-        <CheckBox x:Name="SaveEverythingBox" Content="Sa_ve a copy of every picture Quick Describe describes" Margin="0,8,0,0"
-                  AutomationProperties.HelpText="In the Quick Describe folder in your Pictures folder, named with what was described and when. Picture files you open aren't copied. If your Pictures folder is backed up to OneDrive, these copies are too." />
+        <!-- Where the copies go, and that OneDrive uploads them, are in the check box's own text: JAWS doesn't read help
+             text, and screenshots can hold private things. AccessText (for wrapping and Alt+V) gives a check box no
+             name, so it's named here too, with the same words. -->
+        <CheckBox x:Name="SaveEverythingBox" Margin="0,8,0,0"
+                  AutomationProperties.Name="Save a copy of every picture Quick Describe describes, in Pictures\Quick Describe. If OneDrive backs up your Pictures folder, it uploads them too."
+                  AutomationProperties.HelpText="Named with what was described and when. Picture files you open aren't copied.">
+            <AccessText TextWrapping="Wrap"
+                        Text="Sa_ve a copy of every picture Quick Describe describes, in Pictures\Quick Describe. If OneDrive backs up your Pictures folder, it uploads them too." />
+        </CheckBox>
 
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
             <Button Content="_Reset to Defaults" Padding="10,3" Margin="0,0,16,0" Click="Reset_Click" />

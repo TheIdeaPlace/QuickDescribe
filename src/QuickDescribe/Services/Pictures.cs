@@ -192,7 +192,7 @@ public static class Pictures
     {
         Directory.CreateDirectory(folder);
         var name = Path.GetFileNameWithoutExtension(ScreenshotName(picture.Source, taken));
-        var extension = picture.Source.StartsWith("Camera", StringComparison.Ordinal) ? ".jpg" : ".png";
+        var extension = ExtensionFor(picture.Source);
         // One at a time: two pictures in the same second would otherwise both choose the same free name.
         lock (SavingToFolder)
         {
@@ -204,6 +204,14 @@ public static class Pictures
     }
 
     private static readonly object SavingToFolder = new();
+
+    /// <summary>The type a picture is saved as: JPEG for the camera's photos (a fifth of the size), PNG for the rest,
+    /// which keeps a screen's text sharp.</summary>
+    public static string ExtensionFor(string source) =>
+        source.StartsWith("Camera", StringComparison.Ordinal) ? ".jpg" : ".png";
+
+    /// <summary>Which of <see cref="SaveFilter"/>'s types (counted from 1) fits <see cref="ExtensionFor"/>.</summary>
+    public static int SaveFilterIndexFor(string source) => ExtensionFor(source) == ".jpg" ? 2 : 1;
 
     // ---- Saving a screenshot ----
 

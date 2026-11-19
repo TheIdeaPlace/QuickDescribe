@@ -9,8 +9,9 @@ namespace QuickDescribe.Services;
 public static class Announcer
 {
     /// <summary>Speaks <paramref name="text"/>, cutting off whatever is being said, including the last announcement
-    /// ("Describing…" gives way to the result).</summary>
-    public static void Announce(string text)
+    /// ("Describing…" gives way to the result). <paramref name="after"/>: said after what's being said instead, for a
+    /// note that mustn't cut off the result it belongs to.</summary>
+    public static void Announce(string text, bool after = false)
     {
         if (string.IsNullOrWhiteSpace(text)) return;
         // From the window in front: screen readers can ignore notifications from a window that isn't the active one.
@@ -19,8 +20,9 @@ public static class Announcer
         var peer = UIElementAutomationPeer.FromElement(element) ?? UIElementAutomationPeer.CreatePeerForElement(element);
         try
         {
-            peer?.RaiseNotificationEvent(AutomationNotificationKind.Other, AutomationNotificationProcessing.ImportantMostRecent, text,
-                "QuickDescribeAnnouncement");
+            peer?.RaiseNotificationEvent(AutomationNotificationKind.Other,
+                after ? AutomationNotificationProcessing.ImportantAll : AutomationNotificationProcessing.ImportantMostRecent, text,
+                after ? "QuickDescribeNote" : "QuickDescribeAnnouncement");
         }
         catch (Exception)
         {

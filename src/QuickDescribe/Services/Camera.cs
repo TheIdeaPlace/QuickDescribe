@@ -37,9 +37,69 @@ public static class Camera
     /// <summary>No frames came in time.</summary>
     private sealed class NoFramesException : Exception;
 
+    /// <summary>How long starting the camera may take. Long enough to answer Windows' first "Let Quick Describe access your
+    /// camera?" question, which comes up while it starts; a camera driver that never answers gives up after it.</summary>
+    internal static readonly TimeSpan StartLimit = TimeSpan.FromSeconds(60);
+
+    /// <summary>How long each later step of starting and stopping it may take (no question from Windows comes then).</summary>
+    private static readonly TimeSpan StepLimit = TimeSpan.FromSeconds(15);
+
+    /// <summary>As <see cref="WithinAsync{T}"/>, for a call with no result.</summary>
+    internal static Task WithinAsync(Task task, TimeSpan limit, CancellationToken cancel) => WithinAsync(Done(task), limit, cancel);
+
+    private static async Task<bool> Done(Task task)
+    {
+        await task;
+        return true;
+    }
+
+    /// <summary>How long a second request waits for the first to let go of the camera: longer than one step, since the
+    /// first may be stopping a camera that doesn't answer.</summary>
+    private static readonly TimeSpan WaitForLast = StepLimit + TimeSpan.FromSeconds(5);
+
     /// <summary>One picture at a time: a second request waits for the first to let go of the camera (it was given up, so
     /// that's soon), rather than finding the camera taken by Quick Describe itself.</summary>
     private static readonly SemaphoreSlim OneAtATime = new(1, 1);
+
+    internal const string StuckText = "The camera didn't start. Unplug it and plug it in again, or restart the PC, and try again.";
+
+    internal const string BusyText = "The camera is still busy with the last picture. Try again in a moment.";
+
+    /// <summary>The formats a frame reader can turn into BGRA. Others (H264 on some USB webcams) send nothing or fail.</summary>
+    private static readonly string[] Readable =
+    [
+        MediaEncodingSubtypes.Nv12, MediaEncodingSubtypes.Yuy2, MediaEncodingSubtypes.Mjpg,
+        MediaEncodingSubtypes.Rgb32, MediaEncodingSubtypes.Bgra8,
+    ];
+
+    /// <summary>Whether a frame reader can turn a camera's format into BGRA.</summary>
+    internal static bool IsReadable(string subtype) => Readable.Contains(subtype, StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Waits for a Windows camera call, but no longer than <paramref name="limit"/> or until cancelled: some never
+    /// finish (a stuck driver), and the person mustn't be left waiting on them. What finishes after being given up is
+    /// disposed by <paramref name="abandoned"/>.</summary>
+    internal static async Task<T> WithinAsync<T>(Task<T> task, TimeSpan limit, CancellationToken cancel, Action<T>? abandoned = null)
+    {
+        try
+        {
+            return await task.WaitAsync(limit, cancel);
+        }
+        // Given up on, rather than failed itself (it may finish just as it's given up on: still given up, and disposed).
+        catch (Exception ex) when (ex is TimeoutException or OperationCanceledException && task.Status is not (TaskStatus.Faulted or TaskStatus.Canceled))
+        {
+            _ = task.ContinueWith(t =>
+            {
+                if (t.IsCompletedSuccessfully) abandoned?.Invoke(t.Result);
+                else if (t.Exception is { } failed) Log.Write("camera", $"A start given up on failed afterwards: {failed.InnerException?.Message.Trim()}");
+            }, CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default);
+            if (ex is TimeoutException)
+            {
+                Log.Write("camera", $"The camera didn't answer within {limit.TotalSeconds:0} s, so it was given up on");
+                throw new PictureException(StuckText);
+            }
+            throw;
+        }
+    }
 
     internal const string NotAllowedText =
         "Quick Describe isn't allowed to use the camera. Turn on camera access for it in Windows Settings, Privacy & security, Camera.";
@@ -86,13 +146,12 @@ public static class Camera
     /// use the camera. Throws <see cref="PictureException"/> with a readable message when it can't.</summary>
     public static async Task<Picture> TakeAsync(CancellationToken cancel)
     {
-        await OneAtATime.WaitAsync(cancel);
+        if (!await OneAtATime.WaitAsync(WaitForLast, cancel)) throw new PictureException(BusyText);
         try
         {
             // Source groups rather than video devices: only those with a colour picture, so an infrared Windows Hello
             // camera is never chosen.
-            var groups = await MediaFrameSourceGroup.FindAllAsync();
-            cancel.ThrowIfCancellationRequested();
+            var groups = await WithinAsync(MediaFrameSourceGroup.FindAllAsync().AsTask(), StartLimit, cancel);
             var devices = groups
                 .Select(g => (Group: g, Color: g.SourceInfos.FirstOrDefault(i => i.SourceKind == MediaFrameSourceKind.Color)))
                 .Where(c => c.Color is not null)
@@ -114,18 +173,28 @@ public static class Camera
     {
         foreach (var sharing in new[] { MediaCaptureSharingMode.ExclusiveControl, MediaCaptureSharingMode.SharedReadOnly })
         {
-            using var capture = await OpenAsync(groupId, sharing);
+            // Given up (Escape, a newer request, or a driver that never answers), a start that finishes later is turned
+            // off at once.
+            using var capture = await WithinAsync(OpenAsync(groupId, sharing), StartLimit, cancel, c => c?.Dispose());
             if (capture is null) continue; // couldn't be had alone
-            cancel.ThrowIfCancellationRequested();
             var source = capture.FrameSources.Values
                 .Where(s => s.Info.SourceKind == MediaFrameSourceKind.Color && s.Info.MediaStreamType != MediaStreamType.Photo)
                 .OrderBy(s => s.Info.MediaStreamType == MediaStreamType.VideoRecord ? 0 : 1)
                 .FirstOrDefault() ?? throw new PictureException("The camera has no picture to take.");
-            if (sharing == MediaCaptureSharingMode.ExclusiveControl) await UseLargestAsync(source);
+            if (sharing == MediaCaptureSharingMode.ExclusiveControl) await UseLargestAsync(source, cancel);
 
-            using var reader = await capture.CreateFrameReaderAsync(source, MediaEncodingSubtypes.Bgra8);
+            using var reader = await WithinAsync(capture.CreateFrameReaderAsync(source, MediaEncodingSubtypes.Bgra8).AsTask(), StepLimit, cancel, r => r.Dispose());
             reader.AcquisitionMode = MediaFrameReaderAcquisitionMode.Realtime;
-            var status = await reader.StartAsync();
+            MediaFrameReaderStartStatus status;
+            try
+            {
+                status = await WithinAsync(reader.StartAsync().AsTask(), StepLimit, cancel);
+            }
+            catch (Exception ex) when (ex is PictureException or OperationCanceledException)
+            {
+                await StopAsync(reader); // it may start after being given up on
+                throw;
+            }
             if (status == MediaFrameReaderStartStatus.ExclusiveControlNotAvailable && sharing == MediaCaptureSharingMode.ExclusiveControl)
             {
                 // Another app is streaming from it: started alone, but frames are only had shared.
@@ -155,10 +224,24 @@ public static class Camera
             }
             finally
             {
-                await reader.StopAsync();
+                await StopAsync(reader);
             }
         }
         throw new PictureException(NoFramesText);
+    }
+
+    /// <summary>Stops the frame reader, but doesn't wait forever on a driver that never answers: the picture (or the
+    /// problem) isn't held back, and disposing the camera follows.</summary>
+    private static async Task StopAsync(MediaFrameReader reader)
+    {
+        try
+        {
+            await WithinAsync(reader.StopAsync().AsTask(), StepLimit, CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            Log.Write("camera", $"The frame reader didn't stop: {ex.Message.Trim()}");
+        }
     }
 
     /// <summary>Starts the camera, or null when it can't be had alone (probably in use by another app).</summary>
@@ -196,20 +279,21 @@ public static class Camera
         }
     }
 
-    /// <summary>The largest picture the camera gives at a usable frame rate: more detail for reading text. Its default is
-    /// often 640 by 480.</summary>
-    private static async Task UseLargestAsync(MediaFrameSource source)
+    /// <summary>The largest picture the camera gives at a usable frame rate, in a format the frame reader can read: more
+    /// detail for reading text. Its default is often 640 by 480.</summary>
+    private static async Task UseLargestAsync(MediaFrameSource source, CancellationToken cancel)
     {
         var largest = source.SupportedFormats
+            .Where(f => IsReadable(f.Subtype))
             .Where(f => f.FrameRate.Denominator != 0 && (double)f.FrameRate.Numerator / f.FrameRate.Denominator >= 14)
             .OrderByDescending(f => (long)f.VideoFormat.Width * f.VideoFormat.Height)
             .FirstOrDefault();
         if (largest is null) return;
         try
         {
-            await source.SetFormatAsync(largest);
+            await WithinAsync(source.SetFormatAsync(largest).AsTask(), StepLimit, cancel);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not (OperationCanceledException or PictureException))
         {
             Log.Write("camera", $"The camera's picture size couldn't be chosen, so its own is used: {ex.Message.Trim()}");
         }

@@ -359,6 +359,7 @@ public partial class MainWindow : Window
     {
         _unspoken = null;
         _described = null;
+        _showing = null;
         return _requests.Start();
     }
 
@@ -443,8 +444,7 @@ public partial class MainWindow : Window
 
     /// <summary>Save everything: a copy of each picture described, in Pictures\Quick Describe, named as Save Described Image
     /// would suggest, off the UI thread while it's described. Picture files aren't copied: you have them. Returns what to
-    /// add to the result when it couldn't be saved: said with the result, once each run, rather than in a box that would
-    /// interrupt it (or come up over another app); later failures are only logged.</summary>
+    /// say when it couldn't be saved (see <see cref="SayIfNotSavedAsync"/>).</summary>
     private async Task<string?> SaveEverythingAsync(Picture picture, DateTime taken)
     {
         if (!_settings.SaveEverything || picture.IsFile) return null;
@@ -457,13 +457,48 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             Log.Error("save", "Saving a copy of the described picture failed", ex);
-            if (_saveEverythingFailedSaid) return null;
-            _saveEverythingFailedSaid = true;
             return $"A copy of the picture couldn't be saved in {Pictures.SaveEverythingFolder}: {ex.Message.Trim()}";
         }
     }
 
+    /// <summary>A copy that couldn't be saved is said with its picture's result, once each run, rather than in a box that
+    /// would interrupt it (or come up over another app); later failures are only logged. The result isn't held back for
+    /// it, so a slow folder (a network share, OneDrive) doesn't delay it. This is the note when the save has already
+    /// failed as the result is shown, to go into its text and announcement, so it doesn't cut the result off.</summary>
+    private string? NotSavedYet(Task<string?> saving)
+    {
+        if (_saveEverythingFailedSaid || !saving.IsCompletedSuccessfully || saving.Result is not { } notSaved) return null;
+        _saveEverythingFailedSaid = true;
+        return notSaved;
+    }
+
+    /// <summary>A save still going as the result is shown: if it fails, the note is added to the result and said after
+    /// it, only while that result is still in the box. Replaced by a newer request or a message (F1, About) meanwhile, it
+    /// waits for the next failure, so it's never counted as said unheard or put on something else.</summary>
+    private async Task SayIfNotSavedAsync(Task<string?> saving, Picture picture)
+    {
+        if (saving.IsCompleted) return; // NotSavedYet had it
+        if (await saving is not { } notSaved || _saveEverythingFailedSaid) return;
+        if (_requests.IsRunning || !ReferenceEquals(_showing, picture) || ResultBox.Text != _showingText) return;
+        _saveEverythingFailedSaid = true;
+        ResultBox.AppendText(Environment.NewLine + Environment.NewLine + notSaved);
+        if (_saving) return; // Save Described Image's dialog is open: it's in the box, read there, not said over the dialog
+        if (IsActive) Announcer.Announce(notSaved, after: true);
+        else _unspoken = _unspoken is { } u ? (u.Text + " " + notSaved, u.SaysTextOnly) : (notSaved, false);
+    }
+
     private bool _saveEverythingFailedSaid;
+
+    /// <summary>The picture whose result (or "couldn't be described") is in the Result box, and that text: anything that
+    /// puts other text there (a message, the welcome, an update starting) changes the text, so the note isn't added.</summary>
+    private Picture? _showing;
+    private string? _showingText;
+
+    private void Showing(Picture picture)
+    {
+        _showing = picture;
+        _showingText = ResultBox.Text;
+    }
 
     private async Task DescribeAsync(Picture picture, Request request)
     {
@@ -485,21 +520,24 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            var failed = await saving;
             if (!_requests.IsCurrent(request)) return;
             _requests.Finish(request);
             _describing = null;
+            var failed = NotSavedYet(saving);
             ShowMessage($"{picture.Source} couldn't be described: {ex.Message.Trim()}" + (failed is null ? "" : " " + failed), picture.Source);
+            Showing(picture);
+            _ = SayIfNotSavedAsync(saving, picture);
             return;
         }
-        var notSaved = await saving;
         if (!_requests.IsCurrent(request)) return;
         _requests.Finish(request);
         _describing = null;
         Title = $"{picture.Source} - {AppInfo.Name}";
         var sayTextOnly = result.SaysTextOnly(_settings.TextOnlySaid);
+        var notSaved = NotSavedYet(saving);
         ResultBox.Text = result.BoxText(sayTextOnly) + (notSaved is null ? "" : Environment.NewLine + Environment.NewLine + notSaved);
         var announcement = result.Announcement(sayTextOnly) + (notSaved is null ? "" : " " + notSaved);
+        Showing(picture);
         ResultBox.CaretIndex = 0;
         ResultBox.ScrollToHome();
         // Spoken and focused only while Quick Describe is in front. Switched away from meanwhile (or never brought to the
@@ -515,6 +553,7 @@ public partial class MainWindow : Window
             // The note counts as said once it's heard: if a newer result comes first, that one says it.
             _unspoken = (announcement, sayTextOnly);
         }
+        _ = SayIfNotSavedAsync(saving, picture);
     }
 
     /// <summary>Shows and speaks a message in place of a result. It doesn't stop a description on its way: that replaces
@@ -522,6 +561,7 @@ public partial class MainWindow : Window
     private void ShowMessage(string message, string? source)
     {
         if (!_requests.IsRunning) Title = source is null ? AppInfo.Name : $"{source} - {AppInfo.Name}";
+        _showing = null;
         ResultBox.Text = message;
         ResultBox.CaretIndex = 0;
         ResultBox.Focus();
@@ -636,8 +676,10 @@ public partial class MainWindow : Window
         {
             Title = "Save Described Image",
             Filter = Pictures.SaveFilter,
-            FileName = Pictures.ScreenshotName(picture.Source, taken),
-            DefaultExt = ".png",
+            // The camera's photos as JPEG, the rest as PNG, as Save every picture keeps them.
+            FileName = Path.ChangeExtension(Pictures.ScreenshotName(picture.Source, taken), Pictures.ExtensionFor(picture.Source)),
+            FilterIndex = Pictures.SaveFilterIndexFor(picture.Source),
+            DefaultExt = Pictures.ExtensionFor(picture.Source),
             AddExtension = true,
             InitialDirectory = folder,
         };
