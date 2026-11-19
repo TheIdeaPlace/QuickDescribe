@@ -125,7 +125,8 @@ public sealed class WindowsAI : IDisposable
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            readiness = new AIReadiness(false, "Error", $"The {AppInfo.HelperName} didn't start: {ex.Message}");
+            // The first place a stale development registration shows up (Describing checks before it describes).
+            readiness = new AIReadiness(false, "Error", StartFailureMessage(ex));
         }
         _checked = (readiness, DateTime.UtcNow);
         return readiness;
@@ -151,7 +152,7 @@ public sealed class WindowsAI : IDisposable
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            return new AIReadiness(false, "Error", $"The {AppInfo.HelperName} didn't start: {ex.Message}");
+            return new AIReadiness(false, "Error", StartFailureMessage(ex));
         }
     }
 
@@ -461,7 +462,7 @@ public sealed class WindowsAI : IDisposable
         }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException or IOException)
         {
-            throw new DescriptionException("not_installed", $"The {AppInfo.HelperName} didn't start: {ex.Message.Trim()}");
+            throw new DescriptionException("not_installed", StartFailureMessage(ex));
         }
         if (process is null) throw new DescriptionException("not_installed", NotInstalledMessage);
         // Its stderr is only progress notes ("getting the model ready"); read it so it never fills up and blocks.
@@ -475,6 +476,25 @@ public sealed class WindowsAI : IDisposable
         _server?.Kill();
         _server?.Dispose();
         _server = null;
+    }
+
+    /// <summary>Why the helper didn't start, for the user. "Path not found" (Windows errors 2 and 3) when the
+    /// quickdescribe-ai command exists means it points at a folder that's gone: in practice a development registration
+    /// (build-ai-helper.ps1 -Register) whose folder was deleted, which keeps the command and fails every request. The
+    /// system's own "The system cannot find the path specified" said nothing about that.</summary>
+    internal static string StartFailureMessage(Exception ex) => StartFailureMessage(ex, PackagedHelper is not null);
+
+    /// <summary>As above, for an installed Quick Describe (which starts the helper inside its own package, not the
+    /// quickdescribe-ai command) or a development build (which uses the command).</summary>
+    internal static string StartFailureMessage(Exception ex, bool installedCopy)
+    {
+        if (ex is System.ComponentModel.Win32Exception { NativeErrorCode: 2 or 3 })
+            return installedCopy
+                ? $"The {AppInfo.HelperName} is missing from this copy of Quick Describe. Reinstall Quick Describe."
+                : $"The {AppInfo.HelperName} didn't start, because its quickdescribe-ai command points at a folder " +
+                  "that no longer exists: a development build that was registered and then deleted. Remove it by " +
+                  "running scripts\\build-ai-helper.ps1 -Unregister.";
+        return $"The {AppInfo.HelperName} didn't start: {ex.Message.Trim()}";
     }
 
     private static ProcessStartInfo StartInfo(string mode)

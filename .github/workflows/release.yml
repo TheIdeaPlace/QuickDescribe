@@ -6,11 +6,15 @@ name: Release
 #
 # On a pull request that changes this workflow, the scripts or the packaging, the installer is built unsigned, with no
 # signing access at all, to check the release build.
+#
+# Run by hand (Actions > Release > Run workflow, on any branch), it builds and signs a test installer and keeps it as the
+# run's artifact, with no release at all.
 on:
   push:
     tags: ['v*']
   pull_request:
     paths: ['.github/workflows/release.yml', 'scripts/**', 'packaging/**']
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -50,7 +54,7 @@ jobs:
   # A pull request: built unsigned, with no environment, no Azure and nothing written.
   check:
     name: Installer (unsigned check)
-    if: github.ref_type != 'tag'
+    if: github.event_name == 'pull_request'
     needs: version
     runs-on: windows-latest
     timeout-minutes: 45
@@ -74,11 +78,11 @@ jobs:
           name: installer-unsigned
           path: ${{ runner.temp }}/release
 
-  # A tag on main: built, signed and attached to the draft. Only this job can reach the signing environment, whose
-  # deployment policy allows v* tags alone.
+  # A tag on main: built, signed and attached to the draft. Run by hand: built and signed, kept as the run's artifact.
+  # Only this job can reach the signing environment, and never from a pull request.
   release:
     name: Installer (signed)
-    if: github.ref_type == 'tag'
+    if: github.ref_type == 'tag' || github.event_name == 'workflow_dispatch'
     needs: version
     runs-on: windows-latest
     timeout-minutes: 45
@@ -99,6 +103,7 @@ jobs:
           fetch-depth: 0
 
       - name: The release isn't already published
+        if: github.ref_type == 'tag'
         run: |
           $draft = gh release view $env:TAG --json isDraft --jq .isDraft 2>$null
           if ($LASTEXITCODE -eq 0 -and $draft -ne 'true') { throw "$env:TAG is already published. Raise VERSION and tag again." }
@@ -141,6 +146,7 @@ jobs:
           path: ${{ runner.temp }}/release
 
       - name: Attach to the draft release
+        if: github.ref_type == 'tag'
         env:
           TITLE: ${{ needs.version.outputs.name }} ${{ needs.version.outputs.version }}
         run: |
