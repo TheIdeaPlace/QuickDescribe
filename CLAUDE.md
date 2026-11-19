@@ -1,10 +1,10 @@
 # CLAUDE.md
 
-Quick Describe: a small Windows app that describes the screen, the active window, the focused item, a clipboard picture or a picture file, with Windows' on-device AI, and reads the text in it. Kept deliberately simple (Kelly, 15 Oct 2026): on-device only, no cloud providers, few settings: the hotkeys, the description type, starting at sign-in and keeping running when closed.
+Quick Describe: a small Windows app that describes the screen, the active window, the focused item, a clipboard picture, a picture file or a camera picture, with Windows' on-device AI, and reads the text in it. Kept deliberately simple (Kelly, 15 Oct 2026): on-device only, no cloud providers, few settings: the hotkeys, the description type, starting at sign-in, keeping running when closed and saving every picture described.
 
 ## Layout
 
-- `src/QuickDescribe` — the WPF app. `Services/` holds everything testable: capture geometry (`PixelRect`), capture (`ScreenCapture`), pictures and clipboard (`Pictures`), text (`TextRecognition`), the helper client (`WindowsAI`), putting a result together (`Result`, `Describing`), hotkeys, settings, announcements. `Views/MainWindow` is the only window.
+- `src/QuickDescribe` — the WPF app. `Services/` holds everything testable: capture geometry (`PixelRect`), capture (`ScreenCapture`), the camera (`Camera`), pictures and clipboard (`Pictures`), text (`TextRecognition`), the helper client (`WindowsAI`), putting a result together (`Result`, `Describing`), hotkeys, settings, announcements. `Views/MainWindow` is the only window.
 - `src/QuickDescribeAI` — the packaged Windows AI helper, adapted from My Photo Library Described's `PhotoFinderAI` (same JSON-lines protocol, plus `"op": "read"` for `TextRecognizer`). Windows only lets a packaged app use its AI models; the app starts this from its package's `AI\` folder, or in development through the `quickdescribe-ai.exe` alias a registered helper adds.
 - `tests/QuickDescribe.Tests`, `tests/QuickDescribeAI.Tests` — no test opens a window. Tests that need Windows AI skip themselves unless the helper is installed and the model is ready.
 - `packaging/`, `scripts/build-msix.ps1`, `scripts/sign-files.ps1` — the MSIX installer and signing, copied from My Photo Library Described.
@@ -26,7 +26,7 @@ After changing the helper (`src/QuickDescribeAI`), run `.\scripts\build-ai-helpe
 
 Drawn text comes out blank when Windows' session has no display (Kelly's remote session disconnected), so the tests that draw text fail on this PC then; CI runs them.
 
-`QD_SCREEN_TRIAL=1` runs `ScreenTrialTests`, which captures this PC's real screen, window and focused item and prints only outcomes and timings.
+`QD_SCREEN_TRIAL=1` runs `ScreenTrialTests`, which captures this PC's real screen, window and focused item and prints only outcomes and timings. `QD_CAMERA_TRIAL=1` runs `CameraTrialTests`, which takes one real camera picture and describes it. While the PC is locked the camera answers Access is denied, though camera access is allowed (19 Nov 2026); unlocked, it took a 1920x1080 picture in 1.1 s.
 
 Windows AI needs the Copilot+ NPU, which the vmtest VMs don't have, so this app is tested on Kelly's PC (Kelly, 15 Oct 2026). Keep such runs short and close what you open.
 
@@ -39,6 +39,7 @@ Windows AI needs the Copilot+ NPU, which the vmtest VMs don't have, so this app 
 - `Requests` owns describing's sequencing: a new request or Escape cancels the last; messages (F1, Help) never do, or a result on its way is lost.
 - Windows AI can stop answering altogether while `--check` still says Ready: on 17 Oct 2026, after its `WindowsWorkload.*` components updated without a restart, describing and text recognition both hung (loading the models still worked) until the PC was restarted. So a request that times out (90 seconds, or 60 for each warm-up request, counted from when it reaches the helper) says restarting may help, and one waiting behind it gives up at once, so the text comes from the built-in OCR. Because of that limit, model downloads never happen inside a request: the app gets models ready at start (`--prepare`, and `--read` of a blank picture for the text recognizer), and meanwhile doesn't ask for a description and reads text with the built-in OCR.
 - Phi Silica reports Ready on Kelly's PC, but using it is Access is denied ("Limited Access Feature is not available: com.microsoft.windows.ai.languagemodel"), so Check Windows AI says it isn't supported in Quick Describe yet. When it's about Microsoft's permission, the app's own wording stays neutral (Kelly, 17 Oct 2026).
+- The camera (`Services/Camera.cs`) is on only while a picture is taken: `MediaCapture` with a frame reader, alone if it can be (to choose the largest size) or shared with an app already using it (also when it was had alone but sent no frame in 4 seconds: with the Camera app open, Windows grants it alone and sends nothing), and the frame kept once brightness stops changing (0.8 to 3 seconds), since a camera's first frames are dark. Only source groups with a colour picture count (not Windows Hello's infrared camera); back camera first, then the one facing the person, then ones Windows can't place, which include virtual cameras such as OBS's. One take at a time; if frames stop, the last one is used, or it gives up after 10 seconds. Settings saved before the camera give it M only with Ctrl+Alt held and M free.
 - `WindowsAI` takes an `IHelperConnection` factory, so the client's pairing, restarts, timeouts and cancellation are tested against `FakeHelper` (tests) without a real helper.
 
 ## Test builds in OneDrive

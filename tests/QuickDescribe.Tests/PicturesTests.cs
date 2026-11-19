@@ -183,6 +183,48 @@ public class PicturesTests : IDisposable
     }
 
     [Fact]
+    public void SaveEverything_NamesEachPicture_JpegForTheCamera_AndNeverReplacesOne()
+    {
+        var folder = Path.Combine(_folder, "Quick Describe"); // made when it isn't there
+        var image = Drawn.Solid(10, 10, 0, 0, 0);
+        var screen = Pictures.SaveToFolder(new Picture(image, "Screen"), Taken, folder);
+        var again = Pictures.SaveToFolder(new Picture(image, "Screen"), Taken, folder);
+        var camera = Pictures.SaveToFolder(new Picture(image, "Camera"), Taken, folder);
+        Assert.Equal("Screen 2026-10-30 14.05.12.png", Path.GetFileName(screen));
+        Assert.Equal("Screen 2026-10-30 14.05.12 (2).png", Path.GetFileName(again));
+        Assert.Equal("Camera 2026-10-30 14.05.12.jpg", Path.GetFileName(camera));
+        Assert.Equal(10, Pictures.FromFile(camera).Image.PixelWidth);
+        // A picture file is marked as one, so Save everything leaves it out; its name loses its own extension.
+        Assert.True(Pictures.FromFile(camera).IsFile);
+        // Renamed for where it came from (a file copied to the clipboard), it's still a file.
+        Assert.True((Pictures.FromFile(camera) with { Source = "Clipboard, photo.jpg" }).IsFile);
+        Assert.Equal("Clipboard, photo 2026-10-30 14.05.12.png", Pictures.ScreenshotName("Clipboard, photo.jpg", Taken));
+    }
+
+    [Fact]
+    public void SaveDescribedImage_SuggestsJpegForTheCamera_AndPngForTheRest()
+    {
+        Assert.Equal(".jpg", Pictures.ExtensionFor("Camera"));
+        Assert.Equal(".jpg", Pictures.ExtensionFor("Camera, Integrated Camera"));
+        Assert.Equal(2, Pictures.SaveFilterIndexFor("Camera"));
+        Assert.Equal(".png", Pictures.ExtensionFor("Screen"));
+        Assert.Equal(1, Pictures.SaveFilterIndexFor("Active window, Notepad"));
+        // The filter's second type is JPEG.
+        Assert.StartsWith("JPEG", Pictures.SaveFilter.Split('|')[2]);
+    }
+
+    [Fact]
+    public async Task SaveEverything_TwoPicturesInTheSameSecond_GetTwoFiles()
+    {
+        var folder = Path.Combine(_folder, "both");
+        var image = Drawn.Solid(200, 200, 0, 0, 0);
+        var paths = await Task.WhenAll(Enumerable.Range(0, 4).Select(_ =>
+            Task.Run(() => Pictures.SaveToFolder(new Picture(image, "Screen"), Taken, folder), TestContext.Current.CancellationToken)));
+        Assert.Equal(4, paths.Distinct().Count());
+        Assert.Equal(4, Directory.GetFiles(folder).Length);
+    }
+
+    [Fact]
     public void Save_ToAFolderThatIsntThere_SaysSoByName_AndLeavesNothing()
     {
         var path = Path.Combine(_folder, "gone", "shot.png");

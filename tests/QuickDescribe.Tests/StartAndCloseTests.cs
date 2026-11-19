@@ -101,11 +101,11 @@ public sealed class StartAndCloseTests
     }
 
     [Fact]
-    public void F1_SaysCtrlSSavesTheScreenshot()
+    public void F1_SaysCtrlSSavesTheDescribedPicture()
     {
-        Assert.Contains("Ctrl+S saves the screenshot", MainWindow.InAppKeys(false));
-        Assert.Contains("Ctrl+Shift+S copies that screenshot", MainWindow.InAppKeys(false));
-        Assert.Contains("Describe the screen", MainWindow.NoScreenshotText);
+        Assert.Contains("Ctrl+S saves the picture just described", MainWindow.InAppKeys(false));
+        Assert.Contains("Ctrl+Shift+S copies that picture", MainWindow.InAppKeys(false));
+        Assert.Contains("Describe something first", MainWindow.NoImageText);
     }
 
     [Fact]

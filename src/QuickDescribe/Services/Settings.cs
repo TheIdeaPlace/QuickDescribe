@@ -28,13 +28,17 @@ public sealed class Settings
     /// and the hotkeys keep working, until File, Exit. Off unless chosen.</summary>
     public bool KeepRunning { get; set; }
 
+    /// <summary>Settings' "Save every picture Quick Describe describes": a copy of each, except picture files, in
+    /// Pictures\Quick Describe. Off unless chosen.</summary>
+    public bool SaveEverything { get; set; }
+
     /// <summary>The first close with Keep running on says where Quick Describe went; once.</summary>
     public bool KeepRunningSaid { get; set; }
 
     /// <summary>On a PC that can't describe, the first result says it reads text only; once.</summary>
     public bool TextOnlySaid { get; set; }
 
-    /// <summary>The folder a screenshot was last saved in, where Save Screenshot starts next time; null for Pictures.</summary>
+    /// <summary>The folder Save Described Image last saved in, where it starts next time; null for Pictures.</summary>
     public string? ScreenshotFolder { get; set; }
 
     /// <summary>When updates were last looked for, so the quiet check runs at most once a day.</summary>

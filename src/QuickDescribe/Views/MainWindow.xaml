@@ -14,7 +14,7 @@
                 <MenuItem x:Name="OpenItem" Header="_Open Picture…" InputGestureText="Ctrl+O" Click="OnOpen" />
                 <MenuItem x:Name="ClipboardItem" Header="Describe _Clipboard" Click="OnClipboard" />
                 <Separator />
-                <MenuItem Header="S_ave Screenshot…" InputGestureText="Ctrl+S" Click="OnSaveScreenshot" />
+                <MenuItem Header="S_ave Described Image…" InputGestureText="Ctrl+S" Click="OnSaveImage" />
                 <Separator />
                 <MenuItem Header="_Settings…" InputGestureText="Ctrl+Comma" Click="OnSettings" />
                 <Separator />
@@ -24,12 +24,13 @@
                 <MenuItem x:Name="ScreenItem" Header="_Screen" Click="OnScreen" />
                 <MenuItem x:Name="WindowItem" Header="Active _Window" Click="OnWindow" />
                 <MenuItem x:Name="FocusItem" Header="_Focused Item" Click="OnFocus" />
+                <MenuItem x:Name="CameraItem" Header="_Camera" Click="OnCamera" />
                 <Separator />
                 <MenuItem x:Name="KindMenu" Header="Description _Type" />
             </MenuItem>
             <MenuItem Header="_Edit">
                 <MenuItem Header="_Copy Result" InputGestureText="Ctrl+Shift+C" Click="OnCopy" />
-                <MenuItem Header="Copy _Screenshot" InputGestureText="Ctrl+Shift+S" Click="OnCopyScreenshot" />
+                <MenuItem Header="Copy Described _Image" InputGestureText="Ctrl+Shift+S" Click="OnCopyImage" />
             </MenuItem>
             <MenuItem Header="_Help">
                 <MenuItem Header="_Keyboard Shortcuts" InputGestureText="F1" Click="OnShortcuts" />
@@ -60,9 +61,10 @@
             <!-- Wraps, so no button is cut off in a narrow window or with large text. -->
             <WrapPanel Grid.Row="2" Orientation="Horizontal" Margin="8">
                 <Button Content="Describe _Clipboard" Padding="10,4" Margin="0,0,8,0" Click="OnClipboard" />
+                <Button Content="Describe C_amera" Padding="10,4" Margin="0,0,8,0" Click="OnCamera" />
                 <Button Content="_Open Picture…" Padding="10,4" Margin="0,0,8,0" Click="OnOpen" />
-                <Button Content="_Save Screenshot…" Padding="10,4" Margin="0,0,8,0" Click="OnSaveScreenshot" />
-                <Button Content="Cop_y Screenshot" Padding="10,4" Margin="0,0,8,0" Click="OnCopyScreenshot" />
+                <Button Content="_Save Described Image…" Padding="10,4" Margin="0,0,8,0" Click="OnSaveImage" />
+                <Button Content="Cop_y Described Image" Padding="10,4" Margin="0,0,8,0" Click="OnCopyImage" />
                 <Button Content="Co_py Result" Padding="10,4" Click="OnCopy" />
             </WrapPanel>
         </Grid>

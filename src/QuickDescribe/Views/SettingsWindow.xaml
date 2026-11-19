@@ -3,8 +3,8 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Settings" Width="480" SizeToContent="Height" ResizeMode="NoResize"
         WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
-    <!-- File > Settings: the hotkeys (the keys held, and each command's letter), the description type, starting at sign-in
-         and keeping running when closed. Every list and
+    <!-- File > Settings: the hotkeys (the keys held, and each command's letter), the description type, starting at sign-in,
+         keeping running when closed and saving every picture. Every list and
          box is named as its label says: UI Automation showed them unnamed with only the label's Target set. -->
     <StackPanel Margin="14">
         <GroupBox Header="Hotkeys, from any app" Padding="8">
@@ -29,7 +29,7 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <Grid.RowDefinitions>
-                        <RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition />
+                        <RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition />
                     </Grid.RowDefinitions>
                     <Label Grid.Row="0" Content="_Screen:" Target="{Binding ElementName=ScreenKey}" />
                     <ComboBox x:Name="ScreenKey" AutomationProperties.Name="Screen" Grid.Row="0" Grid.Column="1" Margin="0,2" SelectionChanged="Changed" />
@@ -39,6 +39,8 @@
                     <ComboBox x:Name="FocusKey" AutomationProperties.Name="Focused item" Grid.Row="2" Grid.Column="1" Margin="0,2" SelectionChanged="Changed" />
                     <Label Grid.Row="3" Content="C_lipboard picture:" Target="{Binding ElementName=ClipboardKey}" />
                     <ComboBox x:Name="ClipboardKey" AutomationProperties.Name="Clipboard picture" Grid.Row="3" Grid.Column="1" Margin="0,2" SelectionChanged="Changed" />
+                    <Label Grid.Row="4" Content="Ca_mera:" Target="{Binding ElementName=CameraKey}" />
+                    <ComboBox x:Name="CameraKey" AutomationProperties.Name="Camera" Grid.Row="4" Grid.Column="1" Margin="0,2" SelectionChanged="Changed" />
                 </Grid>
                 <!-- What the choices add up to, or what's wrong with them. Read with OK (its help text) as well. -->
                 <TextBlock x:Name="SummaryText" TextWrapping="Wrap" Margin="0,8,0,0" />
@@ -57,6 +59,15 @@
                  Text="Starting when you sign in to Windows isn't available in this copy. It needs Quick Describe installed from its releases page." />
         <CheckBox x:Name="KeepRunningBox" Content="_Keep running in the notification area when I close the window" Margin="0,8,0,0"
                   AutomationProperties.HelpText="Closing the window, with Alt+F4 or its Close button, leaves the hotkeys working. File, Exit quits." />
+        <!-- Where the copies go, and that OneDrive uploads them, are in the check box's own text: JAWS doesn't read help
+             text, and screenshots can hold private things. AccessText (for wrapping and Alt+V) gives a check box no
+             name, so it's named here too, with the same words. -->
+        <CheckBox x:Name="SaveEverythingBox" Margin="0,8,0,0"
+                  AutomationProperties.Name="Save a copy of every picture Quick Describe describes, in Pictures\Quick Describe. If OneDrive backs up your Pictures folder, it uploads them too."
+                  AutomationProperties.HelpText="Named with what was described and when. Picture files you open aren't copied.">
+            <AccessText TextWrapping="Wrap"
+                        Text="Sa_ve a copy of every picture Quick Describe describes, in Pictures\Quick Describe. If OneDrive backs up your Pictures folder, it uploads them too." />
+        </CheckBox>
 
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
             <Button Content="_Reset to Defaults" Padding="10,3" Margin="0,0,16,0" Click="Reset_Click" />
