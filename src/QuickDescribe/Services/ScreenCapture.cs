@@ -6,8 +6,9 @@ using System.Windows.Media.Imaging;
 
 namespace QuickDescribe.Services;
 
-/// <summary>A picture to describe, and what it is, as said to the person ("Active window, Notepad").</summary>
-public sealed record Picture(BitmapSource Image, string Source);
+/// <summary>A picture to describe, and what it is, as said to the person ("Active window, Notepad"). IsFile: read from a
+/// picture file (opened, dropped or copied in File Explorer), which Save everything doesn't copy.</summary>
+public sealed record Picture(BitmapSource Image, string Source, bool IsFile = false);
 
 /// <summary>Takes pictures of the screen: the monitor in use, the active window, or the area around the focused item.</summary>
 public static class ScreenCapture

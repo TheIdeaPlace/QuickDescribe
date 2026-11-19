@@ -7,7 +7,7 @@ namespace QuickDescribe.Views;
 
 /// <summary>
 /// File > Settings: the keys held with every hotkey (check boxes), each command's letter (A to Z, or None to turn it off),
-/// the description type, starting at sign-in and keeping running when closed. OK checks the choices (<see cref="HotKeyMap.Problems"/>) and then tries them with Windows:
+/// the description type, starting at sign-in, keeping running when closed and saving every picture. OK checks the choices (<see cref="HotKeyMap.Problems"/>) and then tries them with Windows:
 /// a combination another app already has is said, and OK pressed again keeps it anyway (the Describe menu still works).
 /// </summary>
 public partial class SettingsWindow : Window
@@ -26,10 +26,11 @@ public partial class SettingsWindow : Window
     public string Kind { get; private set; }
     public bool SignIn { get; private set; }
     public bool KeepRunning { get; private set; }
+    public bool SaveEverything { get; private set; }
 
     /// <param name="apply">Puts a map into use and says which of its hotkeys Windows refused (another app has them).</param>
     /// <param name="signIn">Whether Windows starts Quick Describe at sign-in now.</param>
-    public SettingsWindow(HotKeyMap map, string kind, Func<HotKeyMap, IReadOnlyList<Target>> apply, SignInStart signIn, bool keepRunning)
+    public SettingsWindow(HotKeyMap map, string kind, Func<HotKeyMap, IReadOnlyList<Target>> apply, SignInStart signIn, bool keepRunning, bool saveEverything)
     {
         InitializeComponent();
         _apply = apply;
@@ -38,6 +39,8 @@ public partial class SettingsWindow : Window
         Kind = kind;
         SignIn = StartAtSignIn.IsOn(signIn);
         KeepRunning = keepRunning;
+        SaveEverything = saveEverything;
+        SaveEverythingBox.IsChecked = saveEverything;
         // Said in the label, as well as after OK: a screen reader reads the label with the box.
         if (StartAtSignIn.StateNote(signIn) is { } note) SignInBox.Content = $"{SignInBox.Content} ({note})";
         if (signIn == SignInStart.Unavailable)
@@ -113,8 +116,9 @@ public partial class SettingsWindow : Window
     private void Reset_Click(object sender, RoutedEventArgs e)
     {
         Show(HotKeyMap.Default, WindowsAI.Kinds[0].Id, false, false);
+        SaveEverythingBox.IsChecked = false;
         _warnedAbout = null;
-        Announcer.Announce($"Back to the defaults. {SummaryText.Text} Starting with Windows and keeping running are off.");
+        Announcer.Announce($"Back to the defaults. {SummaryText.Text} Starting with Windows, keeping running and saving every picture are off.");
     }
 
     private void Ok_Click(object sender, RoutedEventArgs e)
@@ -136,6 +140,7 @@ public partial class SettingsWindow : Window
         // Applied by the main window once Settings closes: a choice Windows doesn't take is said then.
         if (SignInBox.Visibility == Visibility.Visible) SignIn = SignInBox.IsChecked == true;
         KeepRunning = KeepRunningBox.IsChecked == true;
+        SaveEverything = SaveEverythingBox.IsChecked == true;
         // Tried with Windows now, so a combination another app has is said here, where it can be changed.
         var refused = _apply(map);
         Map = map;

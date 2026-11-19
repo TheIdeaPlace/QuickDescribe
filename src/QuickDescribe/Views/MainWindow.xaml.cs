@@ -37,16 +37,15 @@ public partial class MainWindow : Window
     /// the text-only note in it, which counts as said only once it's spoken.</summary>
     private (string Text, bool SaysTextOnly)? _unspoken;
 
-    /// <summary>The picture the last request took of the screen, a window or the focused item, and when, for Save
-    /// Screenshot. Null when the last request was a clipboard picture or a file, which are already kept elsewhere.
+    /// <summary>The picture the last request described, and when, for Save Described Image and Copy Described Image.
     /// Kept until the next request, even closed to the notification area, as the result is: a full screen's pixels
     /// (about 33 MB at 4K), the price of being able to save it after reading the result.</summary>
-    private (Picture Picture, DateTime Taken)? _screenshot;
+    private (Picture Picture, DateTime Taken)? _described;
 
-    /// <summary>Save Screenshot is under way: a result arriving meanwhile is held, and said after "Saved", not cut off by it.</summary>
+    /// <summary>Save Described Image is under way: a result arriving meanwhile is held, and said after "Saved", not cut off by it.</summary>
     private bool _saving;
 
-    /// <summary>Copy Screenshot is getting the picture ready: a second press waits for this one.</summary>
+    /// <summary>Copy Described Image is getting the picture ready: a second press waits for this one.</summary>
     private bool _copying;
 
     /// <summary>How long Windows takes to show the screen without Quick Describe once it's asked to leave it out of
@@ -359,7 +358,7 @@ public partial class MainWindow : Window
     private Request StartRequest()
     {
         _unspoken = null;
-        _screenshot = null;
+        _described = null;
         return _requests.Start();
     }
 
@@ -436,15 +435,41 @@ public partial class MainWindow : Window
         }
         else
         {
-            if (target != Target.Clipboard) _screenshot = (picture, DateTime.Now);
             await DescribeAsync(picture, request);
         }
     }
 
-    private Task DescribeAsync(Picture picture) => DescribeAsync(picture, StartRequest());
+    private Task DescribeFileAsync(Picture picture) => DescribeAsync(picture, StartRequest());
+
+    /// <summary>Save everything: a copy of each picture described, in Pictures\Quick Describe, named as Save Described Image
+    /// would suggest, off the UI thread while it's described. Picture files aren't copied: you have them. Returns what to
+    /// add to the result when it couldn't be saved: said with the result, once each run, rather than in a box that would
+    /// interrupt it (or come up over another app); later failures are only logged.</summary>
+    private async Task<string?> SaveEverythingAsync(Picture picture, DateTime taken)
+    {
+        if (!_settings.SaveEverything || picture.IsFile) return null;
+        try
+        {
+            var path = await Task.Run(() => Pictures.SaveToFolder(picture, taken, Pictures.SaveEverythingFolder));
+            Log.Write("save", $"Saved everything: {Path.GetExtension(path).TrimStart('.')}");
+            return null;
+        }
+        catch (Exception ex)
+        {
+            Log.Error("save", "Saving a copy of the described picture failed", ex);
+            if (_saveEverythingFailedSaid) return null;
+            _saveEverythingFailedSaid = true;
+            return $"A copy of the picture couldn't be saved in {Pictures.SaveEverythingFolder}: {ex.Message.Trim()}";
+        }
+    }
+
+    private bool _saveEverythingFailedSaid;
 
     private async Task DescribeAsync(Picture picture, Request request)
     {
+        var taken = DateTime.Now;
+        _described = (picture, taken);
+        var saving = SaveEverythingAsync(picture, taken);
         _describing = picture.Source;
         Title = $"Describing {picture.Source} - {AppInfo.Name}";
         ResultBox.Text = $"Describing {picture.Source}…";
@@ -460,18 +485,21 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
+            var failed = await saving;
             if (!_requests.IsCurrent(request)) return;
             _requests.Finish(request);
             _describing = null;
-            ShowMessage($"{picture.Source} couldn't be described: {ex.Message.Trim()}", picture.Source);
+            ShowMessage($"{picture.Source} couldn't be described: {ex.Message.Trim()}" + (failed is null ? "" : " " + failed), picture.Source);
             return;
         }
+        var notSaved = await saving;
         if (!_requests.IsCurrent(request)) return;
         _requests.Finish(request);
         _describing = null;
         Title = $"{picture.Source} - {AppInfo.Name}";
         var sayTextOnly = result.SaysTextOnly(_settings.TextOnlySaid);
-        ResultBox.Text = result.BoxText(sayTextOnly);
+        ResultBox.Text = result.BoxText(sayTextOnly) + (notSaved is null ? "" : Environment.NewLine + Environment.NewLine + notSaved);
+        var announcement = result.Announcement(sayTextOnly) + (notSaved is null ? "" : " " + notSaved);
         ResultBox.CaretIndex = 0;
         ResultBox.ScrollToHome();
         // Spoken and focused only while Quick Describe is in front. Switched away from meanwhile (or never brought to the
@@ -479,13 +507,13 @@ public partial class MainWindow : Window
         if (IsActive)
         {
             ResultBox.Focus();
-            Announcer.Announce(result.Announcement(sayTextOnly));
+            Announcer.Announce(announcement);
             if (sayTextOnly) MarkTextOnlySaid();
         }
         else
         {
             // The note counts as said once it's heard: if a newer result comes first, that one says it.
-            _unspoken = (result.Announcement(sayTextOnly), sayTextOnly);
+            _unspoken = (announcement, sayTextOnly);
         }
     }
 
@@ -549,7 +577,7 @@ public partial class MainWindow : Window
         _returnTo = IntPtr.Zero;
         try
         {
-            _ = DescribeAsync(Pictures.FromFile(path));
+            _ = DescribeFileAsync(Pictures.FromFile(path));
         }
         catch (PictureException ex)
         {
@@ -587,17 +615,16 @@ public partial class MainWindow : Window
         }
     }
 
-    internal const string NoScreenshotText =
-        "There's no screenshot to save or copy. Describe the screen, the active window, the focused item or the camera first.";
+    internal const string NoImageText =
+        "There's no described image to save or copy. Describe something first: the screen, a window, the focused item, the camera or a picture.";
 
-    /// <summary>File > Save Screenshot: saves the picture the last description took of the screen, a window, the focused
-    /// item or the camera. The result stays in the box; a problem is said in a message box rather than replacing it.</summary>
-    private async void OnSaveScreenshot(object sender, RoutedEventArgs e)
+    /// <summary>File > Save Described Image: saves the picture the last description was of. The result stays in the box; a problem is said in a message box rather than replacing it.</summary>
+    private async void OnSaveImage(object sender, RoutedEventArgs e)
     {
         if (_dialogOpen) return;
-        if (_screenshot is not { } shot)
+        if (_described is not { } shot)
         {
-            MessageBox.Show(this, NoScreenshotText, "Save Screenshot", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show(this, NoImageText, "Save Described Image", MessageBoxButton.OK, MessageBoxImage.Information);
             ResultBox.Focus();
             return;
         }
@@ -607,7 +634,7 @@ public partial class MainWindow : Window
             : Environment.GetFolderPath(Environment.SpecialFolder.MyPictures);
         var dialog = new SaveFileDialog
         {
-            Title = "Save Screenshot",
+            Title = "Save Described Image",
             Filter = Pictures.SaveFilter,
             FileName = Pictures.ScreenshotName(picture.Source, taken),
             DefaultExt = ".png",
@@ -628,18 +655,18 @@ public partial class MainWindow : Window
             await Task.Run(() => Pictures.Save(picture.Image, path));
             _settings.ScreenshotFolder = Path.GetDirectoryName(path);
             _settings.Save();
-            Log.Write("save", $"Saved a screenshot ({Path.GetExtension(path).TrimStart('.').ToLowerInvariant()})");
+            Log.Write("save", $"Saved the described image ({Path.GetExtension(path).TrimStart('.').ToLowerInvariant()})");
             saved = $"Saved {Path.GetFileName(path)}.";
         }
         catch (PictureException ex)
         {
-            MessageBox.Show(this, ex.Message, "Save Screenshot", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(this, ex.Message, "Save Described Image", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
         catch (Exception ex)
         {
             // Anything else the encoder throws: said, rather than taken for a crash.
-            Log.Error("save", "Saving a screenshot failed", ex);
-            MessageBox.Show(this, $"The screenshot couldn't be saved: {ex.Message.Trim()}", "Save Screenshot", MessageBoxButton.OK, MessageBoxImage.Warning);
+            Log.Error("save", "Saving the described image failed", ex);
+            MessageBox.Show(this, $"The picture couldn't be saved: {ex.Message.Trim()}", "Save Described Image", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
         finally
         {
@@ -650,7 +677,7 @@ public partial class MainWindow : Window
         }
     }
 
-    /// <summary>After Save Screenshot: "Saved" and the file's name, then a result that arrived while saving, in one
+    /// <summary>After Save Described Image: "Saved" and the file's name, then a result that arrived while saving, in one
     /// announcement so neither cuts the other off.</summary>
     private void SayAfterSaving(string? saved)
     {
@@ -666,19 +693,19 @@ public partial class MainWindow : Window
         }
     }
 
-    /// <summary>Edit > Copy Screenshot: puts the picture the last description took on the clipboard, for pasting into an
+    /// <summary>Edit > Copy Described Image: puts the picture the last description was of on the clipboard, for pasting into an
     /// email, a document or a chat.</summary>
-    private async void OnCopyScreenshot(object sender, RoutedEventArgs e)
+    private async void OnCopyImage(object sender, RoutedEventArgs e)
     {
         if (_saving)
         {
-            Announcer.Announce("Still saving the screenshot.");
+            Announcer.Announce("Still saving the picture.");
             return;
         }
         if (_dialogOpen || _copying) return;
-        if (_screenshot is not { } shot)
+        if (_described is not { } shot)
         {
-            MessageBox.Show(this, NoScreenshotText, "Copy Screenshot", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show(this, NoImageText, "Copy Described Image", MessageBoxButton.OK, MessageBoxImage.Information);
             ResultBox.Focus();
             return;
         }
@@ -689,8 +716,8 @@ public partial class MainWindow : Window
             var (bitmap, png) = await Task.Run(() => Pictures.ForClipboard(shot.Picture.Image));
             // Copied, not just offered: it stays on the clipboard after Quick Describe quits.
             Clipboard.SetDataObject(Pictures.ClipboardData(bitmap, png), true);
-            Log.Write("copy", "Copied a screenshot");
-            Announcer.Announce("Screenshot copied");
+            Log.Write("copy", "Copied the described image");
+            Announcer.Announce("Image copied");
         }
         catch (System.Runtime.InteropServices.COMException ex) when (ex.HResult == ClipboardCantOpen)
         {
@@ -699,8 +726,8 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            Log.Error("copy", "Copying a screenshot failed", ex);
-            MessageBox.Show(this, $"The screenshot couldn't be copied: {ex.Message.Trim()}", "Copy Screenshot", MessageBoxButton.OK, MessageBoxImage.Warning);
+            Log.Error("copy", "Copying the described image failed", ex);
+            MessageBox.Show(this, $"The picture couldn't be copied: {ex.Message.Trim()}", "Copy Described Image", MessageBoxButton.OK, MessageBoxImage.Warning);
             ResultBox.Focus();
         }
         finally
@@ -756,7 +783,7 @@ public partial class MainWindow : Window
             var signIn = await _startup.GetAsync();
             // Quitting, or closed to the notification area, while Windows answered.
             if (_closing.IsCancellationRequested || !IsVisible) return;
-            dialog = new SettingsWindow(before, _settings.Kind, UseHotKeys, signIn, _settings.KeepRunning) { Owner = this };
+            dialog = new SettingsWindow(before, _settings.Kind, UseHotKeys, signIn, _settings.KeepRunning, _settings.SaveEverything) { Owner = this };
             saved = dialog.ShowDialog() == true;
             if (saved) await SaveSettingsAsync(dialog);
         }
@@ -777,12 +804,13 @@ public partial class MainWindow : Window
         _settings.HotKeys = dialog.Map;
         _settings.Kind = dialog.Kind;
         _settings.KeepRunning = dialog.KeepRunning;
+        _settings.SaveEverything = dialog.SaveEverything;
         _settings.Save();
         ShowKind();
         ShowExitGesture();
         ShowTrayWhileKeptRunning();
         Log.Write("settings", $"Hotkeys {SettingsWindow.Summary(dialog.Map)} Description type {dialog.Kind}. " +
-                              $"Start at sign-in {(dialog.SignIn ? "on" : "off")}. Keep running {(dialog.KeepRunning ? "on" : "off")}.");
+                              $"Start at sign-in {(dialog.SignIn ? "on" : "off")}. Keep running {(dialog.KeepRunning ? "on" : "off")}. Save everything {(dialog.SaveEverything ? "on" : "off")}.");
         // The welcome or F1 text says the hotkeys, so it's brought up to date; a result in the box is left alone.
         if (IsWelcomeShowing()) ResultBox.Text = Welcome();
         ResultBox.Focus();
@@ -803,10 +831,10 @@ public partial class MainWindow : Window
     internal static string InAppKeys(bool keepRunning) =>
         "In Quick Describe:" + Environment.NewLine +
         "Ctrl+O opens a picture file." + Environment.NewLine +
-        "Ctrl+Comma opens Settings, for the hotkeys, the description type, starting with Windows and keeping running." + Environment.NewLine +
+        "Ctrl+Comma opens Settings, for the hotkeys, the description type, starting with Windows, keeping running and saving every picture." + Environment.NewLine +
         "Ctrl+V describes the picture on the clipboard." + Environment.NewLine +
-        "Ctrl+S saves the screenshot of the screen, window, focused item or camera just described." + Environment.NewLine +
-        "Ctrl+Shift+S copies that screenshot to the clipboard." + Environment.NewLine +
+        "Ctrl+S saves the picture just described." + Environment.NewLine +
+        "Ctrl+Shift+S copies that picture to the clipboard." + Environment.NewLine +
         "Ctrl+Shift+C copies the result." + Environment.NewLine +
         "Escape stops describing, minimizes Quick Describe and goes back to where you were. The hotkeys keep working." + Environment.NewLine +
         (keepRunning
@@ -916,12 +944,12 @@ public partial class MainWindow : Window
         else if (e.Key == Key.S && modifiers == ModifierKeys.Control)
         {
             e.Handled = true;
-            OnSaveScreenshot(sender, e);
+            OnSaveImage(sender, e);
         }
         else if (e.Key == Key.S && modifiers == (ModifierKeys.Control | ModifierKeys.Shift))
         {
             e.Handled = true;
-            OnCopyScreenshot(sender, e);
+            OnCopyImage(sender, e);
         }
         else if (e.Key == Key.OemComma && modifiers == ModifierKeys.Control)
         {

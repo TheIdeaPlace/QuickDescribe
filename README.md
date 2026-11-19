@@ -40,15 +40,15 @@ In Quick Describe itself:
 | Ctrl+O | Opens a picture file and describes it |
 | Ctrl+Comma | Opens Settings |
 | Ctrl+V | Describes the picture on the clipboard |
-| Ctrl+S | Saves the screenshot just described |
-| Ctrl+Shift+S | Copies the screenshot just described to the clipboard |
+| Ctrl+S | Saves the picture just described |
+| Ctrl+Shift+S | Copies the picture just described to the clipboard |
 | Ctrl+Shift+C | Copies the result |
 | F1 | Shows the keys |
 | Escape | Stops describing, and goes back to where you were |
 
-**File, Save Screenshot** (Ctrl+S, or the Save Screenshot button) saves the picture Quick Describe took of the screen, the active window, the focused item or with the camera, as a PNG or JPEG file. It suggests a name that says what was taken and when, such as "Active window, Notepad 2026-10-30 14.05.12.png", in your Pictures folder the first time and then wherever you saved last. Your screen reader says "Saved" and the file's name. The screenshot is the one for the result showing: describing something else replaces it, and a clipboard picture or a picture file has none to save, since you have it already.
+**File, Save Described Image** (Ctrl+S, or the Save Described Image button) saves the picture Quick Describe just described: the screen, the active window, the focused item, the camera's picture, a clipboard picture or a picture file, as a PNG or JPEG file. It suggests a name that says what it was and when, such as "Active window, Notepad 2026-10-30 14.05.12.png", in your Pictures folder the first time and then wherever you saved last. Your screen reader says "Saved" and the file's name. The picture is the one for the result showing: describing something else replaces it.
 
-**Edit, Copy Screenshot** (Ctrl+Shift+S, or the Copy Screenshot button) puts the same picture on the clipboard instead, to paste into an email, a document or a chat. Your screen reader says "Screenshot copied".
+**Edit, Copy Described Image** (Ctrl+Shift+S, or the Copy Described Image button) puts the same picture on the clipboard instead, to paste into an email, a document or a chat. Your screen reader says "Image copied".
 
 ### The camera
 
@@ -58,7 +58,7 @@ In Quick Describe itself:
 - **The first time,** Windows asks whether Quick Describe may use your camera. If you say no, or camera access is off in Windows Settings, Privacy & security, Camera, Quick Describe says so, and that's where to turn it on.
 - **If another app is using the camera** (a video call, say), Quick Describe usually shares it. If it can't get a picture, it says so: close the other app and try again.
 - **Windows Studio Effects** on Copilot+ PCs (background blur, for one) change the picture for every app, Quick Describe included: a blurred background is described as blurred. They're in Windows Settings, Bluetooth & devices, Cameras.
-- **Save Screenshot** and **Copy Screenshot** work on the camera's picture too.
+- **Save Described Image** and **Copy Described Image** work on the camera's picture too.
 
 You can also drop a picture file on the window. The Describe menu does the same as the hotkeys: it steps out of the way first, so it describes what's behind Quick Describe. **Describe, Description Type** chooses how much detail you get: Accessible (the default, written for people who are blind or have low vision), Detailed, Brief or Diagram. **Help, Check Windows AI** says whether your PC can describe pictures, and why not if it can't.
 
@@ -79,8 +79,9 @@ If another app already uses one of the hotkeys, Quick Describe says which when i
 - **The description type:** Accessible, Detailed, Brief or Diagram, as in the Describe menu.
 - **Start Quick Describe when I sign in to Windows:** off unless you turn it on. Windows then starts it out of the way, without taking focus: in the notification area if it keeps running (below), and otherwise minimized on the taskbar. Anything it would ask at the start, such as saying an update was installed, waits until you first come to its window, or, if you've only used hotkeys, until you first press Escape. Quick Describe is then listed in Task Manager's Startup apps and in Windows Settings, Apps, Startup, where you can turn it off too. Turned off there, only you can turn it on again, there: Settings says so next to the check box, and if you check it anyway, offers to open the page. Only the installed copy can start at sign-in.
 - **Keep running in the notification area when I close the window:** off unless you turn it on. Quick Describe's icon is then in the notification area the whole time, and closing the window (Alt+F4, or its Close button) hides it and leaves the hotkeys working; the first time, Quick Describe says where it went. A hotkey brings it back with the result, and so does choosing its icon (Windows+B, then the arrow keys and Enter; new icons start in the hidden icons, behind Show Hidden Icons). The icon's menu (Shift+F10 or the Applications key) has Open and Exit. **File, Exit** quits. Escape still minimizes to the taskbar, as it always does.
+- **Save a copy of every picture Quick Describe describes:** off unless you turn it on. Each picture it describes is saved in a **Quick Describe** folder in your Pictures folder, named with what it was and when, as Save Described Image would suggest: "Screen 2026-11-19 10.41.09.png". The screen, windows, focused items and clipboard pictures are saved as PNG, which keeps text sharp, and the camera's pictures as JPEG. Picture files you open, drop or copy in File Explorer aren't copied, since you have them already. If your Pictures folder is backed up to OneDrive, as it often is, these copies are uploaded with it, screens and all. If a picture can't be saved, the result says so, once each time Quick Describe runs.
 
-OK tries the hotkeys with Windows. If another app (or Windows itself, which keeps many Windows key combinations) already has one, Settings says which, so you can choose another letter; OK again keeps it anyway. **Reset to Defaults** goes back to Ctrl+Alt+Shift with S, W, F, V and M, Accessible descriptions, and both check boxes off.
+OK tries the hotkeys with Windows. If another app (or Windows itself, which keeps many Windows key combinations) already has one, Settings says which, so you can choose another letter; OK again keeps it anyway. **Reset to Defaults** goes back to Ctrl+Alt+Shift with S, W, F, V and M, Accessible descriptions, and the check boxes off.
 
 ## On a PC that isn't a Copilot+ PC
 
@@ -98,7 +99,7 @@ If your PC is a Copilot+ PC but Windows' AI features are turned off (Settings, P
 
 ## Privacy
 
-Pictures are described and read on your PC by Windows itself, and never sent anywhere. The screen is captured, and the camera turned on, only when you press a hotkey or choose a command, and results aren't saved. Pictures aren't either, unless you save or copy a screenshot. Quick Describe keeps your settings, what its update checks found, and its log.
+Pictures are described and read on your PC by Windows itself, and never sent anywhere. The screen is captured, and the camera turned on, only when you press a hotkey or choose a command, and results aren't saved. Pictures aren't either, unless you save or copy one, or turn on saving every picture in Settings (and if your Pictures folder is backed up to OneDrive, those copies are uploaded with it). Quick Describe keeps your settings, what its update checks found, and its log.
 
 What goes over the internet:
 

@@ -3,8 +3,8 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Settings" Width="480" SizeToContent="Height" ResizeMode="NoResize"
         WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
-    <!-- File > Settings: the hotkeys (the keys held, and each command's letter), the description type, starting at sign-in
-         and keeping running when closed. Every list and
+    <!-- File > Settings: the hotkeys (the keys held, and each command's letter), the description type, starting at sign-in,
+         keeping running when closed and saving every picture. Every list and
          box is named as its label says: UI Automation showed them unnamed with only the label's Target set. -->
     <StackPanel Margin="14">
         <GroupBox Header="Hotkeys, from any app" Padding="8">
@@ -59,6 +59,8 @@
                  Text="Starting when you sign in to Windows isn't available in this copy. It needs Quick Describe installed from its releases page." />
         <CheckBox x:Name="KeepRunningBox" Content="_Keep running in the notification area when I close the window" Margin="0,8,0,0"
                   AutomationProperties.HelpText="Closing the window, with Alt+F4 or its Close button, leaves the hotkeys working. File, Exit quits." />
+        <CheckBox x:Name="SaveEverythingBox" Content="Sa_ve a copy of every picture Quick Describe describes" Margin="0,8,0,0"
+                  AutomationProperties.HelpText="In the Quick Describe folder in your Pictures folder, named with what was described and when. Picture files you open aren't copied. If your Pictures folder is backed up to OneDrive, these copies are too." />
 
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
             <Button Content="_Reset to Defaults" Padding="10,3" Margin="0,0,16,0" Click="Reset_Click" />

@@ -29,6 +29,14 @@ public static class Camera
     /// <summary>How long to wait for a frame. Some cameras take seconds to start.</summary>
     private static readonly TimeSpan NoFrames = TimeSpan.FromSeconds(10);
 
+    /// <summary>How long to wait for a frame with the camera had alone. With another app showing it (the Camera app), Windows
+    /// can let Quick Describe have it alone and then send no frames, so after this it's tried shared. It usually sends its
+    /// first frame within a second and a half.</summary>
+    private static readonly TimeSpan NoFramesAlone = TimeSpan.FromSeconds(4);
+
+    /// <summary>No frames came in time.</summary>
+    private sealed class NoFramesException : Exception;
+
     /// <summary>One picture at a time: a second request waits for the first to let go of the camera (it was given up, so
     /// that's soon), rather than finding the camera taken by Quick Describe itself.</summary>
     private static readonly SemaphoreSlim OneAtATime = new(1, 1);
@@ -131,9 +139,19 @@ public static class Camera
                     ? NoFramesText
                     : $"The camera couldn't be started ({status}).");
             }
+            var alone = sharing == MediaCaptureSharingMode.ExclusiveControl;
             try
             {
-                return await SettledFrameAsync(reader, cancel);
+                return await SettledFrameAsync(reader, alone ? NoFramesAlone : NoFrames, cancel);
+            }
+            catch (NoFramesException) when (alone)
+            {
+                Log.Write("camera", "No frames with the camera alone, so it's shared");
+            }
+            catch (NoFramesException)
+            {
+                Log.Write("camera", "No frames came from the camera");
+                throw new PictureException(NoFramesText);
             }
             finally
             {
@@ -199,7 +217,7 @@ public static class Camera
 
     /// <summary>Watches frames until the brightness settles. If frames stop coming, the last one is used once the warm-up
     /// is over, and with none at all it gives up: the camera is never left on waiting.</summary>
-    private static async Task<BitmapSource> SettledFrameAsync(MediaFrameReader reader, CancellationToken cancel)
+    private static async Task<BitmapSource> SettledFrameAsync(MediaFrameReader reader, TimeSpan noFrames, CancellationToken cancel)
     {
         var started = DateTime.UtcNow;
         DateTime? first = null;
@@ -227,10 +245,9 @@ public static class Camera
                     Log.Write("camera", "Frames stopped coming, so the last one is used");
                     return Image(pixels, width, height, started);
                 }
-                else if (now - started > NoFrames)
+                else if (first is null && now - started > noFrames)
                 {
-                    Log.Write("camera", "No frames came from the camera");
-                    throw new PictureException(NoFramesText);
+                    throw new NoFramesException();
                 }
             }
             await Task.Delay(100, cancel);

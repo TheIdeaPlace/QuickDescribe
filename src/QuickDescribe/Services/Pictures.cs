@@ -41,7 +41,7 @@ public static class Pictures
                                        (ex is NotSupportedException ? ": Windows can't read this type of file." : $": {ex.Message.Trim()}"));
         }
         if (image.CanFreeze) image.Freeze();
-        return new Picture(image, Path.GetFileName(path));
+        return new Picture(image, Path.GetFileName(path), IsFile: true);
     }
 
     /// <summary>A picture on the clipboard: a copied picture file, a picture copied as PNG (browsers, Office), or as a
@@ -178,6 +178,33 @@ public static class Pictures
         return stream.ToArray();
     }
 
+    // ---- Saving everything described ----
+
+    /// <summary>Where Settings' "Save every picture Quick Describe describes" keeps them: a Quick Describe folder in
+    /// Pictures.</summary>
+    public static string SaveEverythingFolder =>
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyPictures), AppInfo.Name);
+
+    /// <summary>Saves a picture in a folder, named as Save Described Image suggests: JPEG for the camera's photos (a fifth of
+    /// the size), PNG for the rest, which keeps a screen's text sharp. A name already there gets (2), (3) and so on.
+    /// Returns the file's path.</summary>
+    public static string SaveToFolder(Picture picture, DateTime taken, string folder)
+    {
+        Directory.CreateDirectory(folder);
+        var name = Path.GetFileNameWithoutExtension(ScreenshotName(picture.Source, taken));
+        var extension = picture.Source.StartsWith("Camera", StringComparison.Ordinal) ? ".jpg" : ".png";
+        // One at a time: two pictures in the same second would otherwise both choose the same free name.
+        lock (SavingToFolder)
+        {
+            var path = Path.Combine(folder, name + extension);
+            for (var n = 2; File.Exists(path); n++) path = Path.Combine(folder, $"{name} ({n}){extension}");
+            Save(picture.Image, path);
+            return path;
+        }
+    }
+
+    private static readonly object SavingToFolder = new();
+
     // ---- Saving a screenshot ----
 
     /// <summary>The types Save Screenshot offers, PNG first: it keeps a screen's text sharp.</summary>
@@ -192,6 +219,8 @@ public static class Pictures
     {
         // The note is for hearing, not for a file's name: it's the active window's picture.
         if (source.EndsWith(ScreenCapture.NoPlaceNote, StringComparison.Ordinal)) source = source[..^ScreenCapture.NoPlaceNote.Length];
+        // A picture file's own extension would only confuse: "photo.jpg 2026-10-30 14.05.12.png".
+        if (IsPictureFile(source)) source = source[..^Path.GetExtension(source).Length];
         var invalid = Path.GetInvalidFileNameChars();
         var name = new string(source.Select(c => invalid.Contains(c) ? ' ' : c).ToArray());
         name = string.Join(' ', name.Split(' ', StringSplitOptions.RemoveEmptyEntries));
