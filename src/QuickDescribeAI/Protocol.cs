@@ -208,7 +208,7 @@ public static class Protocol
     {
         "Ready" or "NotReady" => null,
         "NotSupportedOnCurrentSystem" => (Codes.NotSupported,
-            "Windows' image description needs a Copilot+ PC, with an NPU, and a recent version of Windows 11."),
+            "Windows' image description needs a PC with an AI chip (an NPU), such as a Copilot+ PC, and a recent version of Windows 11."),
         "DisabledByUser" => (Codes.DisabledByUser,
             "Windows' AI features are turned off on this PC. They can be turned on in Settings, Privacy & security."),
         _ => (Codes.NotSupported, $"Windows' image description isn't available on this PC ({state})."),

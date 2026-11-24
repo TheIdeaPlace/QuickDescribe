@@ -321,8 +321,8 @@ public partial class MainWindow : Window
         (textOnly ? "" : "Describe, Description Type chooses Accessible, Detailed, Brief or Diagram descriptions. ") +
         "You can also open a picture file (Ctrl+O) or drop one on this window. " +
         (textOnly
-            ? "This PC reads the text in pictures with Windows' text recognition. Describing them needs a Copilot+ PC and a recent version of Windows 11. "
-            : "Pictures are described with Windows' on-device AI on Copilot+ PCs, and their text read with Windows' text recognition. ") +
+            ? "This PC reads the text in pictures with Windows' text recognition. Describing them needs a PC with an AI chip (an NPU), such as a Copilot+ PC, and a recent version of Windows 11. "
+            : "Pictures are described with Windows' on-device AI, on this PC's AI chip, and their text read with Windows' text recognition. ") +
         "File, Settings chooses the hotkeys, and whether Quick Describe starts with Windows. Pictures never leave this PC.";
     }
 

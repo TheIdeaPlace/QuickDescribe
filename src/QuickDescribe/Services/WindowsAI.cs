@@ -107,7 +107,7 @@ public sealed class WindowsAI : IDisposable
     public static bool IsInstalled => File.Exists(HelperPath);
 
     public static readonly string NotInstalledMessage =
-        $"Describing uses Windows' on-device AI on Copilot+ PCs, through the {AppInfo.HelperName}, which isn't installed on this PC.";
+        $"Describing uses Windows' on-device AI on PCs with an AI chip (an NPU), such as Copilot+ PCs, through the {AppInfo.HelperName}, which isn't installed on this PC.";
 
     private static (AIReadiness Readiness, DateTime At)? _checked;
 
@@ -213,7 +213,7 @@ public sealed class WindowsAI : IDisposable
     internal static string? MessageForState(string state) => state switch
     {
         "Ready" or "NotReady" => null,
-        "NotSupportedOnCurrentSystem" => "Windows' image description needs a Copilot+ PC, with an NPU, and a recent version of Windows 11.",
+        "NotSupportedOnCurrentSystem" => "Windows' image description needs a PC with an AI chip (an NPU), such as a Copilot+ PC, and a recent version of Windows 11.",
         "DisabledByUser" => "Windows' AI features are turned off on this PC. They can be turned on in Settings, Privacy & security.",
         _ => $"Windows' image description isn't available on this PC ({state}).",
     };

@@ -19,8 +19,8 @@ body:
     id: windows
     attributes:
       label: Windows version and PC
-      description: Winver shows the version. Say whether it's a Copilot+ PC.
-      placeholder: "Windows 11 25H2, Copilot+ PC"
+      description: Winver shows the version. Say whether the PC has an AI chip (an NPU), as Copilot+ PCs do. Quick Describe's Help, Check Windows AI tells you.
+      placeholder: "Windows 11 25H2, Surface Laptop with an NPU"
   - type: input
     id: assistive
     attributes:
