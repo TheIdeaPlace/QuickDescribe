@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Quick Describe: a small Windows app that describes the screen, the active window, the focused item, a clipboard picture, a picture file or a camera picture, with Windows' on-device AI, and reads the text in it. Kept deliberately simple (Kelly, 15 Oct 2026): on-device only, no cloud providers, few settings: the hotkeys, the description type, starting at sign-in, keeping running when closed, saving every picture described and putting the description in pictures saved.
+Quick Describe: a small Windows app that describes the screen, the active window, the focused item, a clipboard picture, a picture file or a camera picture, with Windows' on-device AI, and reads the text in it. Kept deliberately simple (Kelly, 15 Oct 2026): on-device only, no cloud providers, few settings: the hotkeys, the description type, starting at sign-in, keeping running when closed, saving every picture described and putting the description in pictures saved. The core use is a quick description with nothing saved, so saving every picture is off by default; once someone turns it on, they get it all by default (copies of pictures they open, the description in each), and each part can be turned off (Kelly, 24 Nov 2026).
 
 ## Layout
 
