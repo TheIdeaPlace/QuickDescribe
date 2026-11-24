@@ -4,7 +4,7 @@
         Title="Settings" Width="480" SizeToContent="Height" ResizeMode="NoResize"
         WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
     <!-- File > Settings: the hotkeys (the keys held, and each command's letter), the description type, starting at sign-in,
-         keeping running when closed and saving every picture. Every list and
+         keeping running when closed, saving every picture and putting the description in pictures saved. Every list and
          box is named as its label says: UI Automation showed them unnamed with only the label's Target set. -->
     <StackPanel Margin="14">
         <GroupBox Header="Hotkeys, from any app" Padding="8">
@@ -67,6 +67,14 @@
                   AutomationProperties.HelpText="Named with what was described and when. Picture files you open aren't copied.">
             <AccessText TextWrapping="Wrap"
                         Text="Sa_ve a copy of every picture Quick Describe describes, in Pictures\Quick Describe. If OneDrive backs up your Pictures folder, it uploads them too." />
+        </CheckBox>
+        <!-- On by default. Covers Save Described Image as well as the copies above. That the text read goes in too is in
+             the box's own text, for the same reason as above: a screen's text can be private. -->
+        <CheckBox x:Name="AttachDescriptionsBox" Margin="0,8,0,0"
+                  AutomationProperties.Name="Put the description and the text read in each picture Quick Describe saves, where photo apps and File Explorer can show it."
+                  AutomationProperties.HelpText="Written as the picture's caption, title and accessibility alt text, the same fields My Photo Library Described uses.">
+            <AccessText TextWrapping="Wrap"
+                        Text="_Put the description and the text read in each picture Quick Describe saves, where photo apps and File Explorer can show it." />
         </CheckBox>
 
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">

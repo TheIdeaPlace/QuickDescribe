@@ -32,6 +32,11 @@ public sealed class Settings
     /// Pictures\Quick Describe. Off unless chosen.</summary>
     public bool SaveEverything { get; set; }
 
+    /// <summary>Settings' "Put the description in each picture saved": Save Described Image and save everything write the
+    /// description and the text read into the file (<see cref="EmbeddedDescription"/>). On unless turned off, also for
+    /// settings saved before it was added.</summary>
+    public bool AttachDescriptions { get; set; } = true;
+
     /// <summary>The first close with Keep running on says where Quick Describe went; once.</summary>
     public bool KeepRunningSaid { get; set; }
 

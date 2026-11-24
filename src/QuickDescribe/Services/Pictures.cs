@@ -275,8 +275,9 @@ public static class Pictures
     }
 
     /// <summary>Saves a picture as the file's extension says: JPEG for .jpg and .jpeg, PNG otherwise. Throws a
-    /// <see cref="PictureException"/> with a readable message when it can't.</summary>
-    public static void Save(BitmapSource image, string path)
+    /// <see cref="PictureException"/> with a readable message when it can't. With <paramref name="description"/>, the
+    /// description and text go in the file too; if they can't, the picture is saved without them.</summary>
+    public static void Save(BitmapSource image, string path, EmbeddedDescription? description = null)
     {
         BitmapEncoder encoder = Path.GetExtension(path).ToLowerInvariant() is ".jpg" or ".jpeg"
             ? new JpegBitmapEncoder { QualityLevel = 90 }
@@ -286,7 +287,22 @@ public static class Pictures
         var partial = path + ".partial";
         try
         {
-            using (var stream = File.Create(partial)) encoder.Save(stream);
+            var encoded = new MemoryStream();
+            encoder.Save(encoded);
+            var bytes = encoded.ToArray();
+            if (description is not null)
+            {
+                try
+                {
+                    bytes = description.AddTo(bytes);
+                }
+                catch (Exception ex)
+                {
+                    // Saved without it rather than not at all.
+                    Log.Error("save", "The description wasn't put in the picture", ex);
+                }
+            }
+            File.WriteAllBytes(partial, bytes);
             File.Move(partial, path, overwrite: true);
         }
         catch (Exception ex)

@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Quick Describe: a small Windows app that describes the screen, the active window, the focused item, a clipboard picture, a picture file or a camera picture, with Windows' on-device AI, and reads the text in it. Kept deliberately simple (Kelly, 15 Oct 2026): on-device only, no cloud providers, few settings: the hotkeys, the description type, starting at sign-in, keeping running when closed and saving every picture described.
+Quick Describe: a small Windows app that describes the screen, the active window, the focused item, a clipboard picture, a picture file or a camera picture, with Windows' on-device AI, and reads the text in it. Kept deliberately simple (Kelly, 15 Oct 2026): on-device only, no cloud providers, few settings: the hotkeys, the description type, starting at sign-in, keeping running when closed, saving every picture described and putting the description in pictures saved.
 
 ## Layout
 
@@ -57,6 +57,8 @@ Signing needs, once per repo: the repo in `website/The-Idea-Place-Projects/signi
 `Views/SettingsWindow` edits a `HotKeyMap` (`Services/HotKeys.cs`: the modifiers, each command's letter or none, and `Problems()`, which refuses Shift alone and repeated letters) and the description type. OK applies the map through `MainWindow.UseHotKeys`, which re-registers them and returns the ones Windows refused; Settings says so once, and OK again keeps them. Cancel puts the earlier map back. `Settings.HotKeys` stores it; anything unusable reads as the defaults.
 
 Start at sign-in is the package's startup task (`desktop:StartupTask` in `packaging/AppxManifest.xml`, `Services/StartAtSignIn.cs`), not a Run key: a packaged app's Run key writes go to its private registry, which Windows never reads at sign-in. It's Windows' state, read each time Settings opens, not kept in settings.json; turned off in Task Manager, only the person can turn it on again. Started that way (`StartedBySignIn`), `MainWindow.StartQuietly` keeps out of the way and holds the start's questions until `GreetIfQuiet`. Keep running (`Settings.KeepRunning`) shows `Views/TrayIcon` (WinForms' NotifyIcon, the app's one WinForms use: its implicit usings are removed in the .csproj, so write its types in full) and makes `OnClosing` hide the window unless `_exiting` is set (File > Exit, the icon's Exit, Windows signing out, an update).
+
+Putting the description in (`Settings.AttachDescriptions`, on by default) writes `Services/EmbeddedDescription` into pictures saved: the same XMP fields as My Photo Library Described (dc:description, dc:title, IPTC alt text and extended description, its FileFields.cs rules for the 250-character alt text), as an iTXt chunk (PNG) or APP1 segment (JPEG) added to the file Quick Describe just encoded. Its own files only, so it's an insert, not My Photo Library Described's careful in-place editing, and a file that already has XMP is refused. Save Described Image writes it as it saves; save everything saves the copy as the picture is taken (kept even when describing fails) and adds the fields once the result is in (`AddDescriptionAsync`), logging a failure rather than saying it. File Explorer shows the Title for both formats (checked on Kelly's PC, 24 Nov 2026).
 
 ## Updates and bug reports
 

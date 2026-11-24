@@ -42,6 +42,10 @@ public partial class MainWindow : Window
     /// (about 33 MB at 4K), the price of being able to save it after reading the result.</summary>
     private (Picture Picture, DateTime Taken)? _described;
 
+    /// <summary>What describing <see cref="_described"/> gave, once it has: what Save Described Image puts in the file when
+    /// Settings' "Put the description in each picture saved" is on. Null while it's being described, or when it couldn't be.</summary>
+    private Result? _describedResult;
+
     /// <summary>Save Described Image is under way: a result arriving meanwhile is held, and said after "Saved", not cut off by it.</summary>
     private bool _saving;
 
@@ -359,6 +363,7 @@ public partial class MainWindow : Window
     {
         _unspoken = null;
         _described = null;
+        _describedResult = null;
         _showing = null;
         return _requests.Start();
     }
@@ -443,21 +448,39 @@ public partial class MainWindow : Window
     private Task DescribeFileAsync(Picture picture) => DescribeAsync(picture, StartRequest());
 
     /// <summary>Save everything: a copy of each picture described, in Pictures\Quick Describe, named as Save Described Image
-    /// would suggest, off the UI thread while it's described. Picture files aren't copied: you have them. Returns what to
-    /// say when it couldn't be saved (see <see cref="SayIfNotSavedAsync"/>).</summary>
-    private async Task<string?> SaveEverythingAsync(Picture picture, DateTime taken)
+    /// would suggest, off the UI thread while it's described. Picture files aren't copied: you have them. Returns the
+    /// copy's path, or what to say when it couldn't be saved (see <see cref="SayIfNotSavedAsync"/>).</summary>
+    private async Task<(string? Path, string? NotSaved)> SaveEverythingAsync(Picture picture, DateTime taken)
     {
-        if (!_settings.SaveEverything || picture.IsFile) return null;
+        if (!_settings.SaveEverything || picture.IsFile) return (null, null);
         try
         {
             var path = await Task.Run(() => Pictures.SaveToFolder(picture, taken, Pictures.SaveEverythingFolder));
             Log.Write("save", $"Saved everything: {Path.GetExtension(path).TrimStart('.')}");
-            return null;
+            return (path, null);
         }
         catch (Exception ex)
         {
             Log.Error("save", "Saving a copy of the described picture failed", ex);
-            return $"A copy of the picture couldn't be saved in {Pictures.SaveEverythingFolder}: {ex.Message.Trim()}";
+            return (null, $"A copy of the picture couldn't be saved in {Pictures.SaveEverythingFolder}: {ex.Message.Trim()}");
+        }
+    }
+
+    /// <summary>Puts the description and text in the copy save everything made, once both are done, when Settings' "Put
+    /// the description in each picture saved" is on. The copy was saved first so it's kept even when describing fails or
+    /// hangs. A failure here is only logged: the picture is saved, and the result is already in the box.</summary>
+    private async Task AddDescriptionAsync(Task<(string? Path, string? NotSaved)> saving, Result result)
+    {
+        if (!_settings.AttachDescriptions || EmbeddedDescription.For(result) is not { } fields) return;
+        if ((await saving).Path is not { } path) return;
+        try
+        {
+            await Task.Run(() => fields.AddToFile(path));
+            Log.Write("save", $"Put the description in the copy ({Path.GetExtension(path).TrimStart('.')})");
+        }
+        catch (Exception ex)
+        {
+            Log.Error("save", "Putting the description in the copy failed", ex);
         }
     }
 
@@ -465,9 +488,9 @@ public partial class MainWindow : Window
     /// would interrupt it (or come up over another app); later failures are only logged. The result isn't held back for
     /// it, so a slow folder (a network share, OneDrive) doesn't delay it. This is the note when the save has already
     /// failed as the result is shown, to go into its text and announcement, so it doesn't cut the result off.</summary>
-    private string? NotSavedYet(Task<string?> saving)
+    private string? NotSavedYet(Task<(string? Path, string? NotSaved)> saving)
     {
-        if (_saveEverythingFailedSaid || !saving.IsCompletedSuccessfully || saving.Result is not { } notSaved) return null;
+        if (_saveEverythingFailedSaid || !saving.IsCompletedSuccessfully || saving.Result.NotSaved is not { } notSaved) return null;
         _saveEverythingFailedSaid = true;
         return notSaved;
     }
@@ -475,10 +498,10 @@ public partial class MainWindow : Window
     /// <summary>A save still going as the result is shown: if it fails, the note is added to the result and said after
     /// it, only while that result is still in the box. Replaced by a newer request or a message (F1, About) meanwhile, it
     /// waits for the next failure, so it's never counted as said unheard or put on something else.</summary>
-    private async Task SayIfNotSavedAsync(Task<string?> saving, Picture picture)
+    private async Task SayIfNotSavedAsync(Task<(string? Path, string? NotSaved)> saving, Picture picture)
     {
         if (saving.IsCompleted) return; // NotSavedYet had it
-        if (await saving is not { } notSaved || _saveEverythingFailedSaid) return;
+        if ((await saving).NotSaved is not { } notSaved || _saveEverythingFailedSaid) return;
         if (_requests.IsRunning || !ReferenceEquals(_showing, picture) || ResultBox.Text != _showingText) return;
         _saveEverythingFailedSaid = true;
         ResultBox.AppendText(Environment.NewLine + Environment.NewLine + notSaved);
@@ -529,9 +552,12 @@ public partial class MainWindow : Window
             _ = SayIfNotSavedAsync(saving, picture);
             return;
         }
+        // Put in the copy even when a newer request has replaced this one: the copy is of this picture.
+        _ = AddDescriptionAsync(saving, result);
         if (!_requests.IsCurrent(request)) return;
         _requests.Finish(request);
         _describing = null;
+        _describedResult = result;
         Title = $"{picture.Source} - {AppInfo.Name}";
         var sayTextOnly = result.SaysTextOnly(_settings.TextOnlySaid);
         var notSaved = NotSavedYet(saving);
@@ -694,7 +720,11 @@ public partial class MainWindow : Window
             ResultBox.Focus();
             var path = dialog.FileName;
             // Off the UI thread. The picture is frozen, so it can be read there.
-            await Task.Run(() => Pictures.Save(picture.Image, path));
+            // Looked up once the dialog closes: the result may have arrived while it was open. Only this picture's: a newer
+            // request meanwhile has replaced _described, and its result isn't this picture's.
+            var fields = _settings.AttachDescriptions && _described is { } now && ReferenceEquals(now.Picture, picture)
+                && _describedResult is { } result ? EmbeddedDescription.For(result) : null;
+            await Task.Run(() => Pictures.Save(picture.Image, path, fields));
             _settings.ScreenshotFolder = Path.GetDirectoryName(path);
             _settings.Save();
             Log.Write("save", $"Saved the described image ({Path.GetExtension(path).TrimStart('.').ToLowerInvariant()})");
@@ -825,7 +855,8 @@ public partial class MainWindow : Window
             var signIn = await _startup.GetAsync();
             // Quitting, or closed to the notification area, while Windows answered.
             if (_closing.IsCancellationRequested || !IsVisible) return;
-            dialog = new SettingsWindow(before, _settings.Kind, UseHotKeys, signIn, _settings.KeepRunning, _settings.SaveEverything) { Owner = this };
+            dialog = new SettingsWindow(before, _settings.Kind, UseHotKeys, signIn, _settings.KeepRunning, _settings.SaveEverything,
+                _settings.AttachDescriptions) { Owner = this };
             saved = dialog.ShowDialog() == true;
             if (saved) await SaveSettingsAsync(dialog);
         }
@@ -847,12 +878,14 @@ public partial class MainWindow : Window
         _settings.Kind = dialog.Kind;
         _settings.KeepRunning = dialog.KeepRunning;
         _settings.SaveEverything = dialog.SaveEverything;
+        _settings.AttachDescriptions = dialog.AttachDescriptions;
         _settings.Save();
         ShowKind();
         ShowExitGesture();
         ShowTrayWhileKeptRunning();
         Log.Write("settings", $"Hotkeys {SettingsWindow.Summary(dialog.Map)} Description type {dialog.Kind}. " +
-                              $"Start at sign-in {(dialog.SignIn ? "on" : "off")}. Keep running {(dialog.KeepRunning ? "on" : "off")}. Save everything {(dialog.SaveEverything ? "on" : "off")}.");
+                              $"Start at sign-in {(dialog.SignIn ? "on" : "off")}. Keep running {(dialog.KeepRunning ? "on" : "off")}. Save everything {(dialog.SaveEverything ? "on" : "off")}. " +
+                              $"Description in saved pictures {(dialog.AttachDescriptions ? "on" : "off")}.");
         // The welcome or F1 text says the hotkeys, so it's brought up to date; a result in the box is left alone.
         if (IsWelcomeShowing()) ResultBox.Text = Welcome();
         ResultBox.Focus();
