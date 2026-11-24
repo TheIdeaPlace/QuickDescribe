@@ -80,7 +80,7 @@
              the box's own text, for the same reason as above: a screen's text can be private. -->
         <CheckBox x:Name="AttachDescriptionsBox" Margin="0,8,0,0"
                   AutomationProperties.Name="Put the description and the text read in each picture Quick Describe saves, where photo apps and File Explorer can show it."
-                  AutomationProperties.HelpText="Written as the picture's caption, title and accessibility alt text, the same fields My Photo Library Described uses.">
+                  AutomationProperties.HelpText="Written in the picture's standard fields: File Explorer's Title and Comments, its caption and its accessibility alt text.">
             <AccessText TextWrapping="Wrap"
                         Text="_Put the description and the text read in each picture Quick Describe saves, where photo apps and File Explorer can show it." />
         </CheckBox>
