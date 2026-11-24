@@ -197,7 +197,7 @@ public static class Pictures
     /// <summary>Saves a picture in a folder, named as Save Described Image suggests: JPEG for the camera's photos (a fifth of
     /// the size), PNG for the rest, which keeps a screen's text sharp. A name already there gets (2), (3) and so on.
     /// Returns the file's path.</summary>
-    public static string SaveToFolder(Picture picture, DateTime taken, string folder)
+    public static string SaveToFolder(Picture picture, DateTime taken, string folder, EmbeddedDescription? description = null)
     {
         Directory.CreateDirectory(folder);
         var name = Path.GetFileNameWithoutExtension(ScreenshotName(picture.Source, taken));
@@ -207,7 +207,7 @@ public static class Pictures
         {
             var path = Path.Combine(folder, name + extension);
             for (var n = 2; File.Exists(path); n++) path = Path.Combine(folder, $"{name} ({n}){extension}");
-            Save(picture.Image, path);
+            Save(picture.Image, path, description);
             return path;
         }
     }

@@ -42,6 +42,7 @@ In Quick Describe itself:
 | Ctrl+V | Describes the picture on the clipboard |
 | Ctrl+S | Saves the picture just described |
 | Ctrl+Shift+S | Copies the picture just described to the clipboard |
+| Ctrl+Shift+D | Copies the picture just described and its description together |
 | Ctrl+Shift+C | Copies the result |
 | F1 | Shows the keys |
 | Escape | Stops describing, and goes back to where you were |
@@ -51,6 +52,15 @@ In Quick Describe itself:
 **File, Open Quick Describe Pictures Folder** opens Pictures\Quick Describe, where Save every picture keeps its copies, in File Explorer. The first time, Quick Describe sets that folder to Details view with the columns that show what it put in its pictures: Name, Date modified, Title (the description's first one or two sentences), Comments (the whole description, then the text in the picture) and Size. File Explorer remembers the view from then on, however you open the folder, and if you change it, Quick Describe leaves your choice alone. Opened another way before you first use Open Quick Describe Pictures Folder, the folder starts with File Explorer's usual view.
 
 **Edit, Copy Described Image** (Ctrl+Shift+S, or the Copy Described Image button) puts the same picture on the clipboard instead, to paste into an email, a document or a chat. Your screen reader says "Image copied".
+
+**Edit, Copy Image and Description** (Ctrl+Shift+D, or the Copy Image and Description button) puts the picture and its description on the clipboard together. What you get depends on where you paste, since each app takes the form it understands best:
+
+- **Word, and apps that paste formatted text the way it does:** the picture, with the description as its alt text, and then the description and the text in the picture written out after it.
+- **Notepad, a text box or a chat that takes only text:** the description and the text in the picture.
+- **Paint or another picture editor:** the picture.
+- **File Explorer:** a picture file, named as Save Described Image would name it, with the description inside it.
+
+Your screen reader says "Image and description copied". The description always goes with it, whatever Settings says about putting it in pictures saved. Pressed while Quick Describe is still describing, it says so; try again once the result is in. A picture that couldn't be described is copied without a description, and Quick Describe says so. Email and chat apps differ: some take the picture and its description as Word does, some only the picture, as an attachment or in the message, and some only the text.
 
 ### The camera
 
@@ -102,7 +112,7 @@ If your PC is a Copilot+ PC but Windows' AI features are turned off (Settings, P
 
 ## Privacy
 
-Pictures are described and read on your PC by Windows itself, and never sent anywhere. The screen is captured, and the camera turned on, only when you press a hotkey or choose a command, and results aren't saved. Pictures aren't either, unless you save or copy one, or turn on saving every picture in Settings (and if your Pictures folder is backed up to OneDrive, those copies are uploaded with it). Quick Describe keeps your settings, what its update checks found, and its log.
+Pictures are described and read on your PC by Windows itself, and never sent anywhere. The screen is captured, and the camera turned on, only when you press a hotkey or choose a command, and results aren't saved. Pictures aren't either, unless you save or copy one, or turn on saving every picture in Settings (and if your Pictures folder is backed up to OneDrive, those copies are uploaded with it). Copy Image and Description also keeps the last picture it copied, with its description and text, in Quick Describe's own app folder, so File Explorer can paste it; the next copy replaces it, and uninstalling Quick Describe removes it. Quick Describe keeps your settings, what its update checks found, and its log.
 
 What goes over the internet:
 

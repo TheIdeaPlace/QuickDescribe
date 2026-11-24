@@ -855,6 +855,60 @@ public partial class MainWindow : Window
         }
     }
 
+    /// <summary>Edit > Copy Image and Description: the picture the last description was of and its description together
+    /// (<see cref="CopyWithDescription"/>), so a document or email gets the picture with its alt text and the description
+    /// after it, a text box the description, and File Explorer a picture file with the description inside. Always with the
+    /// description: it's what this command is for, so Settings' "Put the description in each picture saved" doesn't apply.</summary>
+    private async void OnCopyWithDescription(object sender, RoutedEventArgs e)
+    {
+        const string title = "Copy Image and Description";
+        if (_saving)
+        {
+            Announcer.Announce("Still saving the picture.");
+            return;
+        }
+        if (_dialogOpen || _copying) return;
+        // Before the check below: while a picture is still being taken (the camera settling), there's no picture yet either.
+        if (_requests.IsRunning)
+        {
+            Announcer.Announce("Still describing. Copy the image and description once the result is in.");
+            return;
+        }
+        if (_described is not { } shot)
+        {
+            MessageBox.Show(this, NoImageText, title, MessageBoxButton.OK, MessageBoxImage.Information);
+            ResultBox.Focus();
+            return;
+        }
+        // None when it couldn't be described, or had neither a description nor text: the picture alone, said so.
+        var fields = _describedResult is { } result ? EmbeddedDescription.For(result) : null;
+        _copying = true;
+        try
+        {
+            // Off the UI thread: encoding a large screen, and saving its file, takes a moment. The picture is frozen.
+            var prepared = await Task.Run(() => CopyWithDescription.Prepare(shot.Picture, shot.Taken, fields, CopyWithDescription.Folder));
+            Clipboard.SetDataObject(CopyWithDescription.ClipboardData(prepared), true);
+            CopyWithDescription.RemoveOlder(Path.GetDirectoryName(prepared.File)!, prepared.File);
+            Log.Write("copy", $"Copied the image and description ({Path.GetExtension(prepared.File).TrimStart('.')}{(fields is null ? ", no description" : "")})");
+            Announcer.Announce(fields is null ? "Image copied. It has no description to copy." : "Image and description copied");
+        }
+        catch (System.Runtime.InteropServices.COMException ex) when (ex.HResult == ClipboardCantOpen)
+        {
+            Log.Write("copy", "The clipboard was busy");
+            Announcer.Announce("The clipboard is busy. Try again.");
+        }
+        catch (Exception ex)
+        {
+            Log.Error("copy", "Copying the image and description failed", ex);
+            MessageBox.Show(this, $"The picture and description couldn't be copied: {ex.Message.Trim()}", title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            ResultBox.Focus();
+        }
+        finally
+        {
+            _copying = false;
+        }
+    }
+
     /// <summary>CLIPBRD_E_CANT_OPEN: another app has the clipboard open.</summary>
     private const int ClipboardCantOpen = unchecked((int)0x800401D0);
 
@@ -958,6 +1012,7 @@ public partial class MainWindow : Window
         "Ctrl+V describes the picture on the clipboard." + Environment.NewLine +
         "Ctrl+S saves the picture just described." + Environment.NewLine +
         "Ctrl+Shift+S copies that picture to the clipboard." + Environment.NewLine +
+        "Ctrl+Shift+D copies the picture and its description together, to paste into a document, an email or File Explorer." + Environment.NewLine +
         "Ctrl+Shift+C copies the result." + Environment.NewLine +
         "Escape stops describing, minimizes Quick Describe and goes back to where you were. The hotkeys keep working." + Environment.NewLine +
         (keepRunning
@@ -1073,6 +1128,11 @@ public partial class MainWindow : Window
         {
             e.Handled = true;
             OnCopyImage(sender, e);
+        }
+        else if (e.Key == Key.D && modifiers == (ModifierKeys.Control | ModifierKeys.Shift))
+        {
+            e.Handled = true;
+            OnCopyWithDescription(sender, e);
         }
         else if (e.Key == Key.OemComma && modifiers == ModifierKeys.Control)
         {
