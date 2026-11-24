@@ -283,6 +283,56 @@ public class EmbeddedDescriptionTests : IDisposable
         }
     }
 
+    [Theory]
+    [InlineData(".jpg")]
+    [InlineData(".png")]
+    public void CopyOfAnOpenedPicture_WithItsOwnMetadata_GetsTheDescription(string extension)
+    {
+        // A photo with its own title (XMP and EXIF), as a camera or photo app leaves it.
+        var original = Path.Combine(_folder, "Holiday" + extension);
+        Drawn.OnSta(() =>
+        {
+            BitmapEncoder encoder = extension == ".jpg" ? new JpegBitmapEncoder() : new PngBitmapEncoder();
+            var metadata = new BitmapMetadata(extension == ".jpg" ? "jpg" : "png") { Title = "Their own title" };
+            encoder.Frames.Add(BitmapFrame.Create(Drawn.Solid(24, 18, 10, 120, 200), null, metadata, null));
+            using var file = File.Create(original);
+            encoder.Save(file);
+            return 0;
+        });
+        Assert.NotNull(EmbeddedDescription.PacketIn(File.ReadAllBytes(original)));
+        var before = File.ReadAllBytes(original);
+
+        var picture = Pictures.FromFile(original);
+        var fields = EmbeddedDescription.For(Described("A blue square.", "TEXT"))!;
+        foreach (var opened in new[] { picture, picture with { Source = "Clipboard, " + picture.Source } })
+        {
+            // Save everything's copy, the description added once the result is in.
+            var copy = Pictures.SaveToFolder(opened, Taken, Path.Combine(_folder, "Quick Describe"));
+            fields.AddToFile(copy);
+            var back = EmbeddedDescription.Fields(EmbeddedDescription.PacketIn(File.ReadAllBytes(copy))!);
+            Assert.Equal(fields.Caption, back.Caption);
+            Assert.Equal(fields.Title, back.Title);
+            AssertTitleIs(copy, fields.Title!);
+            AssertOpens(copy, 24, 18);
+        }
+
+        // Save Described Image, with the description as it saves.
+        var saved = Path.Combine(_folder, "saved" + extension);
+        Pictures.Save(picture.Image, saved, fields);
+        var savedBack = EmbeddedDescription.Fields(EmbeddedDescription.PacketIn(File.ReadAllBytes(saved))!);
+        Assert.Equal((fields.Caption, fields.Title), (savedBack.Caption, savedBack.Title));
+        AssertTitleIs(saved, fields.Title!);
+
+        // Saved without a description, none of the original's own fields come along either.
+        var plain = Path.Combine(_folder, "plain" + extension);
+        Pictures.Save(picture.Image, plain);
+        Assert.Null(EmbeddedDescription.PacketIn(File.ReadAllBytes(plain)));
+        Assert.Null(TitleOf(plain));
+
+        // The person's own file isn't changed.
+        Assert.Equal(before, File.ReadAllBytes(original));
+    }
+
     [Fact]
     public void Jpeg_TooMuchText_KeepsTheDescription()
     {
@@ -311,6 +361,16 @@ public class EmbeddedDescriptionTests : IDisposable
         off.Save(path);
         Assert.False(Settings.Load(path).AttachDescriptions);
     }
+
+    /// <summary>The Title as Windows reads it (XMP or EXIF, through WIC's photo policy), so the original's own can't linger.</summary>
+    private static string? TitleOf(string path) => Drawn.OnSta(() =>
+    {
+        using var stream = File.OpenRead(path);
+        var frame = BitmapDecoder.Create(stream, BitmapCreateOptions.None, BitmapCacheOption.OnLoad).Frames[0];
+        return (frame.Metadata as BitmapMetadata)?.Title;
+    });
+
+    private static void AssertTitleIs(string path, string title) => Assert.Equal(title, TitleOf(path));
 
     private static void AssertOpens(string path, int width, int height)
     {

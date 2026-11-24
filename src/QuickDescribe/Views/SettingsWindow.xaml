@@ -63,10 +63,10 @@
              text, and screenshots can hold private things. AccessText (for wrapping and Alt+V) gives a check box no
              name, so it's named here too, with the same words. -->
         <CheckBox x:Name="SaveEverythingBox" Margin="0,8,0,0"
-                  AutomationProperties.Name="Save a copy of every picture Quick Describe describes, in Pictures\Quick Describe. File, Open Pictures Folder shows them. If OneDrive backs up your Pictures folder, it uploads them too."
+                  AutomationProperties.Name="Save a copy of every picture Quick Describe describes, in Pictures\Quick Describe. File, Open Quick Describe Pictures Folder shows them. If OneDrive backs up your Pictures folder, it uploads them too."
                   AutomationProperties.HelpText="Named with what was described and when.">
             <AccessText TextWrapping="Wrap"
-                        Text="Sa_ve a copy of every picture Quick Describe describes, in Pictures\Quick Describe. File, Open Pictures Folder shows them. If OneDrive backs up your Pictures folder, it uploads them too." />
+                        Text="Sa_ve a copy of every picture Quick Describe describes, in Pictures\Quick Describe. File, Open Quick Describe Pictures Folder shows them. If OneDrive backs up your Pictures folder, it uploads them too." />
         </CheckBox>
         <!-- On by default; only matters with the box above on, which its text says, rather than being disabled (a disabled
              box isn't reached with Tab, so a screen reader wouldn't find it to learn it's there). Indented under it. -->
@@ -76,13 +76,14 @@
             <AccessText TextWrapping="Wrap"
                         Text="When saving every picture, also copy picture files I op_en or drop. Your own file isn't changed." />
         </CheckBox>
-        <!-- On by default. Covers Save Described Image as well as the copies above. That the text read goes in too is in
-             the box's own text, for the same reason as above: a screen's text can be private. -->
+        <!-- On by default. Covers Save Described Image, in whatever folder it saves, as well as the copies above: said in
+             the box's own text, as is that the text read goes in too (a screen's text can be private), since JAWS doesn't
+             read help text. -->
         <CheckBox x:Name="AttachDescriptionsBox" Margin="0,8,0,0"
-                  AutomationProperties.Name="Put the description and the text read in each picture Quick Describe saves, where photo apps and File Explorer can show it."
+                  AutomationProperties.Name="Put the description and the text read in each picture Quick Describe saves, with Save Described Image or Save every picture, where photo apps and File Explorer can show it."
                   AutomationProperties.HelpText="Written in the picture's standard fields: File Explorer's Title and Comments, its caption and its accessibility alt text.">
             <AccessText TextWrapping="Wrap"
-                        Text="_Put the description and the text read in each picture Quick Describe saves, where photo apps and File Explorer can show it." />
+                        Text="_Put the description and the text read in each picture Quick Describe saves, with Save Described Image or Save every picture, where photo apps and File Explorer can show it." />
         </CheckBox>
 
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">

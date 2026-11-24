@@ -298,7 +298,9 @@ public static class Pictures
         BitmapEncoder encoder = Path.GetExtension(path).ToLowerInvariant() is ".jpg" or ".jpeg"
             ? new JpegBitmapEncoder { QualityLevel = 90 }
             : new PngBitmapEncoder();
-        encoder.Frames.Add(BitmapFrame.Create(image));
+        // Without the metadata of a picture file it was opened from: BitmapFrame.Create(image) would carry its XMP over,
+        // which leaves no room for the description, and its EXIF (where it was taken, the camera) into every copy.
+        encoder.Frames.Add(BitmapFrame.Create(image, null, null, null));
         // Written beside it first, so a failure part way doesn't leave a broken picture, or spoil one being replaced.
         var partial = path + ".partial";
         try

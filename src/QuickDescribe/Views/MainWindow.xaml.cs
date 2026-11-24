@@ -773,7 +773,7 @@ public partial class MainWindow : Window
         }
     }
 
-    /// <summary>File > Open Pictures Folder: Pictures\Quick Describe, where Save every picture keeps its copies, in File
+    /// <summary>File > Open Quick Describe Pictures Folder: Pictures\Quick Describe, where Save every picture keeps its copies, in File
     /// Explorer. The first time, its view is set to Details with Title and Comments (<see cref="FolderView"/>); Explorer
     /// remembers it from then on.</summary>
     private async void OnOpenPicturesFolder(object sender, RoutedEventArgs e)

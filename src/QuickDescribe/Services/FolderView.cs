@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 namespace QuickDescribe.Services;
 
 /// <summary>
-/// File > Open Pictures Folder: opens Pictures\Quick Describe in File Explorer and, the first time, sets that window to
+/// File > Open Quick Describe Pictures Folder: opens Pictures\Quick Describe in File Explorer and, the first time, sets that window to
 /// Details view with the columns that show what Quick Describe put in its pictures (<see cref="Columns"/>). Explorer
 /// keeps a folder's view in the person's own settings, not in the folder, and a packaged app can't define a folder type
 /// (that's HKLM), so the view is set on the open window through the shell's own interfaces (IShellBrowser, IFolderView,
