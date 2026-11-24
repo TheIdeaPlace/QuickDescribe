@@ -157,6 +157,64 @@ public class EmbeddedDescriptionTests : IDisposable
     }
 
     [Fact]
+    public async Task AddToFile_WaitsOutAFileHeldOpen()
+    {
+        var path = Pictures.SaveToFolder(new Picture(Drawn.Solid(8, 8, 0, 0, 0), "Screen"), Taken, _folder);
+        var fields = EmbeddedDescription.For(Described("Black."))!;
+        // Held open the way OneDrive or the indexer would, for a moment, as the fields are added.
+        var held = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+        var release = Task.Delay(300, TestContext.Current.CancellationToken).ContinueWith(_ => held.Dispose(), TestContext.Current.CancellationToken);
+        await Task.Run(() => fields.AddToFile(path, [200, 400, 800]), TestContext.Current.CancellationToken);
+        await release;
+        Assert.Equal("Black.", EmbeddedDescription.Fields(EmbeddedDescription.PacketIn(File.ReadAllBytes(path))!).Caption);
+        Assert.Empty(Directory.GetFiles(_folder, "*.partial"));
+    }
+
+    [Fact]
+    public void AddToFile_HeldOpenThroughout_FailsAndLeavesNothingBehind()
+    {
+        var path = Pictures.SaveToFolder(new Picture(Drawn.Solid(8, 8, 0, 0, 0), "Screen"), Taken, _folder);
+        using (new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
+            Assert.ThrowsAny<UnauthorizedAccessException>(() => EmbeddedDescription.For(Described("Black."))!.AddToFile(path, [50]));
+        Assert.Null(EmbeddedDescription.PacketIn(File.ReadAllBytes(path)));
+        Assert.Empty(Directory.GetFiles(_folder, "*.partial"));
+    }
+
+    [Fact]
+    public void Leftovers_AreRemoved_AndPicturesKept()
+    {
+        var picture = Pictures.SaveToFolder(new Picture(Drawn.Solid(8, 8, 0, 0, 0), "Screen"), Taken, _folder);
+        File.WriteAllText(picture + ".0123456789abcdef0123456789abcdef.partial", "cut short");
+        EmbeddedDescription.RemoveLeftovers(_folder);
+        Assert.Equal([picture], Directory.GetFiles(_folder));
+        EmbeddedDescription.RemoveLeftovers(Path.Combine(_folder, "not there"));
+    }
+
+    [Fact]
+    public void Jpeg_XmpGoesAfterJfif()
+    {
+        var path = Path.Combine(_folder, "order.jpg");
+        Pictures.Save(Drawn.Solid(10, 10, 0, 0, 0), path, EmbeddedDescription.For(Described("Dark.")));
+        var jpeg = File.ReadAllBytes(path);
+        var markers = new List<byte>();
+        for (var at = 2; jpeg[at] == 0xFF && jpeg[at + 1] != 0xDA; at += 2 + System.Buffers.Binary.BinaryPrimitives.ReadUInt16BigEndian(jpeg.AsSpan(at + 2)))
+            markers.Add(jpeg[at + 1]);
+        Assert.Equal(0xE0, markers[0]); // JFIF first, as WPF wrote it
+        Assert.Equal(0xE1, markers[1]); // then the XMP
+    }
+
+    [Fact]
+    public void Shorten_NeverCutsAnEmojiInHalf()
+    {
+        // The 249th and 250th characters are the two halves of one emoji.
+        var text = new string('a', 248) + "😀" + " and more words after it";
+        var alt = EmbeddedDescription.Shorten(text);
+        Assert.True(alt.Length <= EmbeddedDescription.AltTextLimit);
+        Assert.False(char.IsHighSurrogate(alt[^2]) && !char.IsLowSurrogate(alt[^1]));
+        Assert.All(alt.Select((c, i) => (c, i)).Where(x => char.IsHighSurrogate(x.c)), x => Assert.True(char.IsLowSurrogate(alt[x.i + 1])));
+    }
+
+    [Fact]
     public void WithoutFields_NothingIsAdded()
     {
         var path = Path.Combine(_folder, "plain.png");

@@ -287,11 +287,17 @@ public static class Pictures
         var partial = path + ".partial";
         try
         {
-            var encoded = new MemoryStream();
-            encoder.Save(encoded);
-            var bytes = encoded.ToArray();
-            if (description is not null)
+            if (description is null)
             {
+                // Straight to the file: a 4K screen's PNG is tens of MB, not worth holding twice.
+                using var stream = File.Create(partial);
+                encoder.Save(stream);
+            }
+            else
+            {
+                var encoded = new MemoryStream();
+                encoder.Save(encoded);
+                var bytes = encoded.ToArray();
                 try
                 {
                     bytes = description.AddTo(bytes);
@@ -301,8 +307,8 @@ public static class Pictures
                     // Saved without it rather than not at all.
                     Log.Error("save", "The description wasn't put in the picture", ex);
                 }
+                File.WriteAllBytes(partial, bytes);
             }
-            File.WriteAllBytes(partial, bytes);
             File.Move(partial, path, overwrite: true);
         }
         catch (Exception ex)

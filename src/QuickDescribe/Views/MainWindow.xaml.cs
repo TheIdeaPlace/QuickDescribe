@@ -111,6 +111,8 @@ public partial class MainWindow : Window
             ResultBox.Text = StartText();
         }
         _ = GetModelReadyAsync(_closing.Token);
+        // A copy whose description was being added as Quick Describe last quit leaves a .partial file behind.
+        _ = Task.Run(() => EmbeddedDescription.RemoveLeftovers(Pictures.SaveEverythingFolder));
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e)
@@ -364,6 +366,7 @@ public partial class MainWindow : Window
         _unspoken = null;
         _described = null;
         _describedResult = null;
+        _savedBeforeResult = null;
         _showing = null;
         return _requests.Start();
     }
@@ -466,23 +469,30 @@ public partial class MainWindow : Window
         }
     }
 
-    /// <summary>Puts the description and text in the copy save everything made, once both are done, when Settings' "Put
-    /// the description in each picture saved" is on. The copy was saved first so it's kept even when describing fails or
-    /// hangs. A failure here is only logged: the picture is saved, and the result is already in the box.</summary>
-    private async Task AddDescriptionAsync(Task<(string? Path, string? NotSaved)> saving, Result result)
+    /// <summary>Puts the description and text in a picture already saved, once both are done, when Settings' "Put the
+    /// description in each picture saved" is on: the copy save everything made, or a picture Save Described Image saved
+    /// before its result came. Saved first so it's kept even when describing fails or hangs. A failure here is only
+    /// logged: the picture is saved, and the result is already in the box.</summary>
+    private async Task AddDescriptionAsync(Task<string?> saved, Result result, string what)
     {
         if (!_settings.AttachDescriptions || EmbeddedDescription.For(result) is not { } fields) return;
-        if ((await saving).Path is not { } path) return;
+        if (await saved is not { } path) return;
         try
         {
             await Task.Run(() => fields.AddToFile(path));
-            Log.Write("save", $"Put the description in the copy ({Path.GetExtension(path).TrimStart('.')})");
+            Log.Write("save", $"Put the description in {what} ({Path.GetExtension(path).TrimStart('.')})");
         }
         catch (Exception ex)
         {
-            Log.Error("save", "Putting the description in the copy failed", ex);
+            Log.Error("save", $"Putting the description in {what} failed", ex);
         }
     }
+
+    private static async Task<string?> PathOf(Task<(string? Path, string? NotSaved)> saving) => (await saving).Path;
+
+    /// <summary>A picture Save Described Image saved while it was still being described: its result goes in the file when
+    /// it comes. Cleared by a newer request, which cancels that one.</summary>
+    private (Picture Picture, string Path)? _savedBeforeResult;
 
     /// <summary>A copy that couldn't be saved is said with its picture's result, once each run, rather than in a box that
     /// would interrupt it (or come up over another app); later failures are only logged. The result isn't held back for
@@ -552,9 +562,15 @@ public partial class MainWindow : Window
             _ = SayIfNotSavedAsync(saving, picture);
             return;
         }
-        // Put in the copy even when a newer request has replaced this one: the copy is of this picture.
-        _ = AddDescriptionAsync(saving, result);
+        // Put in the copy before the check below, which a result arriving just as a newer request starts would fail. A
+        // request cancelled before its result came (Escape, or a newer one) never gets here: its copy stays without.
+        _ = AddDescriptionAsync(PathOf(saving), result, "the copy");
         if (!_requests.IsCurrent(request)) return;
+        if (_savedBeforeResult is { } early && ReferenceEquals(early.Picture, picture))
+        {
+            _savedBeforeResult = null;
+            _ = AddDescriptionAsync(Task.FromResult<string?>(early.Path), result, "the picture saved");
+        }
         _requests.Finish(request);
         _describing = null;
         _describedResult = result;
@@ -725,6 +741,12 @@ public partial class MainWindow : Window
             var fields = _settings.AttachDescriptions && _described is { } now && ReferenceEquals(now.Picture, picture)
                 && _describedResult is { } result ? EmbeddedDescription.For(result) : null;
             await Task.Run(() => Pictures.Save(picture.Image, path, fields));
+            // Saved before its result came: the result goes in when it does, or now if it arrived during the save.
+            if (fields is null && _settings.AttachDescriptions && _described is { } still && ReferenceEquals(still.Picture, picture))
+            {
+                if (_describedResult is { } arrived) _ = AddDescriptionAsync(Task.FromResult<string?>(path), arrived, "the picture saved");
+                else _savedBeforeResult = (picture, path);
+            }
             _settings.ScreenshotFolder = Path.GetDirectoryName(path);
             _settings.Save();
             Log.Write("save", $"Saved the described image ({Path.GetExtension(path).TrimStart('.').ToLowerInvariant()})");

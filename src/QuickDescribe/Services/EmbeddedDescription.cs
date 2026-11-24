@@ -254,16 +254,31 @@ public sealed partial record EmbeddedDescription(string? Description, string? Te
     }
 
     /// <summary>Adds the fields to a picture already saved, written beside it and swapped in whole, so a failure part way
-    /// leaves the picture as it was.</summary>
-    public void AddToFile(string path)
+    /// leaves the picture as it was. The file was written seconds ago, when OneDrive or the search indexer is most likely
+    /// to have it open, so a sharing violation is tried again, twice, a moment later. Call it off the UI thread.</summary>
+    public void AddToFile(string path, int[]? retryDelaysMs = null)
     {
         var with = AddTo(File.ReadAllBytes(path));
         // A name of its own: Save Described Image could be saving over this same copy (it writes path + ".partial").
-        var partial = $"{path}.{Guid.NewGuid():N}.partial";
+        var partial = $"{path}.{Guid.NewGuid():N}{PartialExtension}";
         try
         {
             File.WriteAllBytes(partial, with);
-            File.Move(partial, path, overwrite: true);
+            foreach (var delay in (retryDelaysMs ?? [500, 2000]).Append(-1))
+            {
+                try
+                {
+                    File.Move(partial, path, overwrite: true);
+                    break;
+                }
+                // Replacing a file another process has open without delete sharing is "Access is denied", not a sharing
+                // violation (checked on Kelly's PC), so both are tried again.
+                catch (Exception ex) when (delay >= 0 && ex is UnauthorizedAccessException
+                                               or IOException and not (FileNotFoundException or DirectoryNotFoundException))
+                {
+                    Thread.Sleep(delay);
+                }
+            }
         }
         catch
         {
@@ -271,6 +286,24 @@ public sealed partial record EmbeddedDescription(string? Description, string? Te
             catch (Exception) { /* nothing more to do */ }
             throw;
         }
+    }
+
+    internal const string PartialExtension = ".partial";
+
+    /// <summary>Removes what a write cut short left in a folder: Quick Describe quit, or Windows signed out, part way
+    /// through adding the fields to a copy. Only the folder save everything uses, which is Quick Describe's own.</summary>
+    public static void RemoveLeftovers(string folder)
+    {
+        try
+        {
+            if (!Directory.Exists(folder)) return;
+            foreach (var leftover in Directory.EnumerateFiles(folder, "*" + PartialExtension))
+            {
+                try { File.Delete(leftover); }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { /* in use: next time */ }
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { /* nothing more to do */ }
     }
 
     private static readonly uint[] CrcTable = Enumerable.Range(0, 256).Select(n =>
