@@ -771,6 +771,29 @@ public partial class MainWindow : Window
         }
     }
 
+    /// <summary>File > Open Pictures Folder: Pictures\Quick Describe, where Save every picture keeps its copies, in File
+    /// Explorer. The first time, its view is set to Details with Title and Comments (<see cref="FolderView"/>); Explorer
+    /// remembers it from then on.</summary>
+    private async void OnOpenPicturesFolder(object sender, RoutedEventArgs e)
+    {
+        if (_dialogOpen) return;
+        var folder = Pictures.SaveEverythingFolder;
+        try
+        {
+            if (await FolderView.OpenAsync(folder, setView: !_settings.FolderViewSet))
+            {
+                _settings.FolderViewSet = true;
+                _settings.Save();
+                Log.Write("folder", "Set the pictures folder's view: Details, with Title and Comments");
+            }
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException or IOException or UnauthorizedAccessException)
+        {
+            Log.Error("folder", "Opening the pictures folder failed", ex);
+            ShowMessage($"File Explorer couldn't open the pictures folder. It's at {folder}.", null);
+        }
+    }
+
     /// <summary>After Save Described Image: "Saved" and the file's name, then a result that arrived while saving, in one
     /// announcement so neither cuts the other off.</summary>
     private void SayAfterSaving(string? saved)

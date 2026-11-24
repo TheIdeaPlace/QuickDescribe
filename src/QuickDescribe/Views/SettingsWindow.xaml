@@ -63,10 +63,10 @@
              text, and screenshots can hold private things. AccessText (for wrapping and Alt+V) gives a check box no
              name, so it's named here too, with the same words. -->
         <CheckBox x:Name="SaveEverythingBox" Margin="0,8,0,0"
-                  AutomationProperties.Name="Save a copy of every picture Quick Describe describes, in Pictures\Quick Describe. If OneDrive backs up your Pictures folder, it uploads them too."
+                  AutomationProperties.Name="Save a copy of every picture Quick Describe describes, in Pictures\Quick Describe. File, Open Pictures Folder shows them. If OneDrive backs up your Pictures folder, it uploads them too."
                   AutomationProperties.HelpText="Named with what was described and when. Picture files you open aren't copied.">
             <AccessText TextWrapping="Wrap"
-                        Text="Sa_ve a copy of every picture Quick Describe describes, in Pictures\Quick Describe. If OneDrive backs up your Pictures folder, it uploads them too." />
+                        Text="Sa_ve a copy of every picture Quick Describe describes, in Pictures\Quick Describe. File, Open Pictures Folder shows them. If OneDrive backs up your Pictures folder, it uploads them too." />
         </CheckBox>
         <!-- On by default. Covers Save Described Image as well as the copies above. That the text read goes in too is in
              the box's own text, for the same reason as above: a screen's text can be private. -->

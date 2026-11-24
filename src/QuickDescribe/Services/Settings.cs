@@ -37,6 +37,10 @@ public sealed class Settings
     /// settings saved before it was added.</summary>
     public bool AttachDescriptions { get; set; } = true;
 
+    /// <summary>File > Open Pictures Folder has set the folder's File Explorer view (Details, with Title and Comments)
+    /// once; it isn't set again, so a view changed afterwards is the person's.</summary>
+    public bool FolderViewSet { get; set; }
+
     /// <summary>The first close with Keep running on says where Quick Describe went; once.</summary>
     public bool KeepRunningSaid { get; set; }
 

@@ -48,6 +48,8 @@ In Quick Describe itself:
 
 **File, Save Described Image** (Ctrl+S, or the Save Described Image button) saves the picture Quick Describe just described: the screen, the active window, the focused item, the camera's picture, a clipboard picture or a picture file, as a PNG or JPEG file. It suggests a name that says what it was and when, such as "Active window, Notepad 2026-10-30 14.05.12.png", in your Pictures folder the first time and then wherever you saved last. Your screen reader says "Saved" and the file's name. The picture is the one for the result showing: describing something else replaces it. The description and the text read go in the file too, unless you turn that off in Settings.
 
+**File, Open Pictures Folder** opens Pictures\Quick Describe, where Save every picture keeps its copies, in File Explorer. The first time, Quick Describe sets that folder to Details view with the columns that show what it put in its pictures: Name, Date modified, Title (the description's first one or two sentences), Comments (the whole description, then the text in the picture) and Size. File Explorer remembers the view from then on, however you open the folder, and if you change it, Quick Describe leaves your choice alone. Opened another way before you first use Open Pictures Folder, the folder starts with File Explorer's usual view.
+
 **Edit, Copy Described Image** (Ctrl+Shift+S, or the Copy Described Image button) puts the same picture on the clipboard instead, to paste into an email, a document or a chat. Your screen reader says "Image copied".
 
 ### The camera

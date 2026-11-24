@@ -15,6 +15,7 @@
                 <MenuItem x:Name="ClipboardItem" Header="Describe _Clipboard" Click="OnClipboard" />
                 <Separator />
                 <MenuItem Header="S_ave Described Image…" InputGestureText="Ctrl+S" Click="OnSaveImage" />
+                <MenuItem Header="Open _Pictures Folder" Click="OnOpenPicturesFolder" />
                 <Separator />
                 <MenuItem Header="_Settings…" InputGestureText="Ctrl+Comma" Click="OnSettings" />
                 <Separator />
