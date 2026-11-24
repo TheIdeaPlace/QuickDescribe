@@ -42,6 +42,10 @@ public partial class MainWindow : Window
     /// (about 33 MB at 4K), the price of being able to save it after reading the result.</summary>
     private (Picture Picture, DateTime Taken)? _described;
 
+    /// <summary>What describing <see cref="_described"/> gave, once it has: what Save Described Image puts in the file when
+    /// Settings' "Put the description in each picture saved" is on. Null while it's being described, or when it couldn't be.</summary>
+    private Result? _describedResult;
+
     /// <summary>Save Described Image is under way: a result arriving meanwhile is held, and said after "Saved", not cut off by it.</summary>
     private bool _saving;
 
@@ -107,6 +111,8 @@ public partial class MainWindow : Window
             ResultBox.Text = StartText();
         }
         _ = GetModelReadyAsync(_closing.Token);
+        // A copy whose description was being added as Quick Describe last quit leaves a .partial file behind.
+        _ = Task.Run(() => EmbeddedDescription.RemoveLeftovers(Pictures.SaveEverythingFolder));
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e)
@@ -315,8 +321,8 @@ public partial class MainWindow : Window
         (textOnly ? "" : "Describe, Description Type chooses Accessible, Detailed, Brief or Diagram descriptions. ") +
         "You can also open a picture file (Ctrl+O) or drop one on this window. " +
         (textOnly
-            ? "This PC reads the text in pictures with Windows' text recognition. Describing them needs a Copilot+ PC and a recent version of Windows 11. "
-            : "Pictures are described with Windows' on-device AI on Copilot+ PCs, and their text read with Windows' text recognition. ") +
+            ? "This PC reads the text in pictures with Windows' text recognition. Describing them needs a PC with an AI chip (an NPU), such as a Copilot+ PC, and a recent version of Windows 11. "
+            : "Pictures are described with Windows' on-device AI, on this PC's AI chip, and their text read with Windows' text recognition. ") +
         "File, Settings chooses the hotkeys, and whether Quick Describe starts with Windows. Pictures never leave this PC.";
     }
 
@@ -359,6 +365,8 @@ public partial class MainWindow : Window
     {
         _unspoken = null;
         _described = null;
+        _describedResult = null;
+        _savedBeforeResult = null;
         _showing = null;
         return _requests.Start();
     }
@@ -443,31 +451,58 @@ public partial class MainWindow : Window
     private Task DescribeFileAsync(Picture picture) => DescribeAsync(picture, StartRequest());
 
     /// <summary>Save everything: a copy of each picture described, in Pictures\Quick Describe, named as Save Described Image
-    /// would suggest, off the UI thread while it's described. Picture files aren't copied: you have them. Returns what to
-    /// say when it couldn't be saved (see <see cref="SayIfNotSavedAsync"/>).</summary>
-    private async Task<string?> SaveEverythingAsync(Picture picture, DateTime taken)
+    /// would suggest, off the UI thread while it's described. Picture files are copied too when Settings' "Also copy
+    /// pictures I open" is on (the default), except ones already in that folder. Returns the copy's path, or what to say
+    /// when it couldn't be saved (see <see cref="SayIfNotSavedAsync"/>).</summary>
+    private async Task<(string? Path, string? NotSaved)> SaveEverythingAsync(Picture picture, DateTime taken)
     {
-        if (!_settings.SaveEverything || picture.IsFile) return null;
+        if (!_settings.SaveEverything) return (null, null);
+        if (picture.IsFile && !(_settings.CopyOpenedPictures && !Pictures.IsInSaveEverythingFolder(picture.FilePath))) return (null, null);
         try
         {
             var path = await Task.Run(() => Pictures.SaveToFolder(picture, taken, Pictures.SaveEverythingFolder));
             Log.Write("save", $"Saved everything: {Path.GetExtension(path).TrimStart('.')}");
-            return null;
+            return (path, null);
         }
         catch (Exception ex)
         {
             Log.Error("save", "Saving a copy of the described picture failed", ex);
-            return $"A copy of the picture couldn't be saved in {Pictures.SaveEverythingFolder}: {ex.Message.Trim()}";
+            return (null, $"A copy of the picture couldn't be saved in {Pictures.SaveEverythingFolder}: {ex.Message.Trim()}");
         }
     }
+
+    /// <summary>Puts the description and text in a picture already saved, once both are done, when Settings' "Put the
+    /// description in each picture saved" is on: the copy save everything made, or a picture Save Described Image saved
+    /// before its result came. Saved first so it's kept even when describing fails or hangs. A failure here is only
+    /// logged: the picture is saved, and the result is already in the box.</summary>
+    private async Task AddDescriptionAsync(Task<string?> saved, Result result, string what)
+    {
+        if (!_settings.AttachDescriptions || EmbeddedDescription.For(result) is not { } fields) return;
+        if (await saved is not { } path) return;
+        try
+        {
+            await Task.Run(() => fields.AddToFile(path));
+            Log.Write("save", $"Put the description in {what} ({Path.GetExtension(path).TrimStart('.')})");
+        }
+        catch (Exception ex)
+        {
+            Log.Error("save", $"Putting the description in {what} failed", ex);
+        }
+    }
+
+    private static async Task<string?> PathOf(Task<(string? Path, string? NotSaved)> saving) => (await saving).Path;
+
+    /// <summary>A picture Save Described Image saved while it was still being described: its result goes in the file when
+    /// it comes. Cleared by a newer request, which cancels that one.</summary>
+    private (Picture Picture, string Path)? _savedBeforeResult;
 
     /// <summary>A copy that couldn't be saved is said with its picture's result, once each run, rather than in a box that
     /// would interrupt it (or come up over another app); later failures are only logged. The result isn't held back for
     /// it, so a slow folder (a network share, OneDrive) doesn't delay it. This is the note when the save has already
     /// failed as the result is shown, to go into its text and announcement, so it doesn't cut the result off.</summary>
-    private string? NotSavedYet(Task<string?> saving)
+    private string? NotSavedYet(Task<(string? Path, string? NotSaved)> saving)
     {
-        if (_saveEverythingFailedSaid || !saving.IsCompletedSuccessfully || saving.Result is not { } notSaved) return null;
+        if (_saveEverythingFailedSaid || !saving.IsCompletedSuccessfully || saving.Result.NotSaved is not { } notSaved) return null;
         _saveEverythingFailedSaid = true;
         return notSaved;
     }
@@ -475,10 +510,10 @@ public partial class MainWindow : Window
     /// <summary>A save still going as the result is shown: if it fails, the note is added to the result and said after
     /// it, only while that result is still in the box. Replaced by a newer request or a message (F1, About) meanwhile, it
     /// waits for the next failure, so it's never counted as said unheard or put on something else.</summary>
-    private async Task SayIfNotSavedAsync(Task<string?> saving, Picture picture)
+    private async Task SayIfNotSavedAsync(Task<(string? Path, string? NotSaved)> saving, Picture picture)
     {
         if (saving.IsCompleted) return; // NotSavedYet had it
-        if (await saving is not { } notSaved || _saveEverythingFailedSaid) return;
+        if ((await saving).NotSaved is not { } notSaved || _saveEverythingFailedSaid) return;
         if (_requests.IsRunning || !ReferenceEquals(_showing, picture) || ResultBox.Text != _showingText) return;
         _saveEverythingFailedSaid = true;
         ResultBox.AppendText(Environment.NewLine + Environment.NewLine + notSaved);
@@ -529,9 +564,18 @@ public partial class MainWindow : Window
             _ = SayIfNotSavedAsync(saving, picture);
             return;
         }
+        // Put in the copy before the check below, which a result arriving just as a newer request starts would fail. A
+        // request cancelled before its result came (Escape, or a newer one) never gets here: its copy stays without.
+        _ = AddDescriptionAsync(PathOf(saving), result, "the copy");
         if (!_requests.IsCurrent(request)) return;
+        if (_savedBeforeResult is { } early && ReferenceEquals(early.Picture, picture))
+        {
+            _savedBeforeResult = null;
+            _ = AddDescriptionAsync(Task.FromResult<string?>(early.Path), result, "the picture saved");
+        }
         _requests.Finish(request);
         _describing = null;
+        _describedResult = result;
         Title = $"{picture.Source} - {AppInfo.Name}";
         var sayTextOnly = result.SaysTextOnly(_settings.TextOnlySaid);
         var notSaved = NotSavedYet(saving);
@@ -677,9 +721,9 @@ public partial class MainWindow : Window
             Title = "Save Described Image",
             Filter = Pictures.SaveFilter,
             // The camera's photos as JPEG, the rest as PNG, as Save every picture keeps them.
-            FileName = Path.ChangeExtension(Pictures.ScreenshotName(picture.Source, taken), Pictures.ExtensionFor(picture.Source)),
-            FilterIndex = Pictures.SaveFilterIndexFor(picture.Source),
-            DefaultExt = Pictures.ExtensionFor(picture.Source),
+            FileName = Path.ChangeExtension(Pictures.ScreenshotName(picture.Source, taken), Pictures.ExtensionFor(picture)),
+            FilterIndex = Pictures.SaveFilterIndexFor(picture),
+            DefaultExt = Pictures.ExtensionFor(picture),
             AddExtension = true,
             InitialDirectory = folder,
         };
@@ -694,7 +738,17 @@ public partial class MainWindow : Window
             ResultBox.Focus();
             var path = dialog.FileName;
             // Off the UI thread. The picture is frozen, so it can be read there.
-            await Task.Run(() => Pictures.Save(picture.Image, path));
+            // Looked up once the dialog closes: the result may have arrived while it was open. Only this picture's: a newer
+            // request meanwhile has replaced _described, and its result isn't this picture's.
+            var fields = _settings.AttachDescriptions && _described is { } now && ReferenceEquals(now.Picture, picture)
+                && _describedResult is { } result ? EmbeddedDescription.For(result) : null;
+            await Task.Run(() => Pictures.Save(picture.Image, path, fields));
+            // Saved before its result came: the result goes in when it does, or now if it arrived during the save.
+            if (fields is null && _settings.AttachDescriptions && _described is { } still && ReferenceEquals(still.Picture, picture))
+            {
+                if (_describedResult is { } arrived) _ = AddDescriptionAsync(Task.FromResult<string?>(path), arrived, "the picture saved");
+                else _savedBeforeResult = (picture, path);
+            }
             _settings.ScreenshotFolder = Path.GetDirectoryName(path);
             _settings.Save();
             Log.Write("save", $"Saved the described image ({Path.GetExtension(path).TrimStart('.').ToLowerInvariant()})");
@@ -716,6 +770,29 @@ public partial class MainWindow : Window
             _saving = false;
             ResultBox.Focus();
             SayAfterSaving(saved);
+        }
+    }
+
+    /// <summary>File > Open Quick Describe Pictures Folder: Pictures\Quick Describe, where Save every picture keeps its copies, in File
+    /// Explorer. The first time, its view is set to Details with Title and Comments (<see cref="FolderView"/>); Explorer
+    /// remembers it from then on.</summary>
+    private async void OnOpenPicturesFolder(object sender, RoutedEventArgs e)
+    {
+        if (_dialogOpen) return;
+        var folder = Pictures.SaveEverythingFolder;
+        try
+        {
+            if (await FolderView.OpenAsync(folder, setView: !_settings.FolderViewSet))
+            {
+                _settings.FolderViewSet = true;
+                _settings.Save();
+                Log.Write("folder", "Set the pictures folder's view: Details, with Title and Comments");
+            }
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException or IOException or UnauthorizedAccessException)
+        {
+            Log.Error("folder", "Opening the pictures folder failed", ex);
+            ShowMessage($"File Explorer couldn't open the pictures folder. It's at {folder}.", null);
         }
     }
 
@@ -778,6 +855,60 @@ public partial class MainWindow : Window
         }
     }
 
+    /// <summary>Edit > Copy Image and Description: the picture the last description was of and its description together
+    /// (<see cref="CopyWithDescription"/>), so a document or email gets the picture with its alt text and the description
+    /// after it, a text box the description, and File Explorer a picture file with the description inside. Always with the
+    /// description: it's what this command is for, so Settings' "Put the description in each picture saved" doesn't apply.</summary>
+    private async void OnCopyWithDescription(object sender, RoutedEventArgs e)
+    {
+        const string title = "Copy Image and Description";
+        if (_saving)
+        {
+            Announcer.Announce("Still saving the picture.");
+            return;
+        }
+        if (_dialogOpen || _copying) return;
+        // Before the check below: while a picture is still being taken (the camera settling), there's no picture yet either.
+        if (_requests.IsRunning)
+        {
+            Announcer.Announce("Still describing. Copy the image and description once the result is in.");
+            return;
+        }
+        if (_described is not { } shot)
+        {
+            MessageBox.Show(this, NoImageText, title, MessageBoxButton.OK, MessageBoxImage.Information);
+            ResultBox.Focus();
+            return;
+        }
+        // None when it couldn't be described, or had neither a description nor text: the picture alone, said so.
+        var fields = _describedResult is { } result ? EmbeddedDescription.For(result) : null;
+        _copying = true;
+        try
+        {
+            // Off the UI thread: encoding a large screen, and saving its file, takes a moment. The picture is frozen.
+            var prepared = await Task.Run(() => CopyWithDescription.Prepare(shot.Picture, shot.Taken, fields, CopyWithDescription.Folder));
+            Clipboard.SetDataObject(CopyWithDescription.ClipboardData(prepared), true);
+            CopyWithDescription.RemoveOlder(Path.GetDirectoryName(prepared.File)!, prepared.File);
+            Log.Write("copy", $"Copied the image and description ({Path.GetExtension(prepared.File).TrimStart('.')}{(fields is null ? ", no description" : "")})");
+            Announcer.Announce(fields is null ? "Image copied. It has no description to copy." : "Image and description copied");
+        }
+        catch (System.Runtime.InteropServices.COMException ex) when (ex.HResult == ClipboardCantOpen)
+        {
+            Log.Write("copy", "The clipboard was busy");
+            Announcer.Announce("The clipboard is busy. Try again.");
+        }
+        catch (Exception ex)
+        {
+            Log.Error("copy", "Copying the image and description failed", ex);
+            MessageBox.Show(this, $"The picture and description couldn't be copied: {ex.Message.Trim()}", title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            ResultBox.Focus();
+        }
+        finally
+        {
+            _copying = false;
+        }
+    }
+
     /// <summary>CLIPBRD_E_CANT_OPEN: another app has the clipboard open.</summary>
     private const int ClipboardCantOpen = unchecked((int)0x800401D0);
 
@@ -825,7 +956,8 @@ public partial class MainWindow : Window
             var signIn = await _startup.GetAsync();
             // Quitting, or closed to the notification area, while Windows answered.
             if (_closing.IsCancellationRequested || !IsVisible) return;
-            dialog = new SettingsWindow(before, _settings.Kind, UseHotKeys, signIn, _settings.KeepRunning, _settings.SaveEverything) { Owner = this };
+            dialog = new SettingsWindow(before, _settings.Kind, UseHotKeys, signIn, _settings.KeepRunning, _settings.SaveEverything,
+                _settings.AttachDescriptions, _settings.CopyOpenedPictures) { Owner = this };
             saved = dialog.ShowDialog() == true;
             if (saved) await SaveSettingsAsync(dialog);
         }
@@ -847,12 +979,15 @@ public partial class MainWindow : Window
         _settings.Kind = dialog.Kind;
         _settings.KeepRunning = dialog.KeepRunning;
         _settings.SaveEverything = dialog.SaveEverything;
+        _settings.AttachDescriptions = dialog.AttachDescriptions;
+        _settings.CopyOpenedPictures = dialog.CopyOpenedPictures;
         _settings.Save();
         ShowKind();
         ShowExitGesture();
         ShowTrayWhileKeptRunning();
         Log.Write("settings", $"Hotkeys {SettingsWindow.Summary(dialog.Map)} Description type {dialog.Kind}. " +
-                              $"Start at sign-in {(dialog.SignIn ? "on" : "off")}. Keep running {(dialog.KeepRunning ? "on" : "off")}. Save everything {(dialog.SaveEverything ? "on" : "off")}.");
+                              $"Start at sign-in {(dialog.SignIn ? "on" : "off")}. Keep running {(dialog.KeepRunning ? "on" : "off")}. Save everything {(dialog.SaveEverything ? "on" : "off")}. " +
+                              $"Copy opened pictures {(dialog.CopyOpenedPictures ? "on" : "off")}. Description in saved pictures {(dialog.AttachDescriptions ? "on" : "off")}.");
         // The welcome or F1 text says the hotkeys, so it's brought up to date; a result in the box is left alone.
         if (IsWelcomeShowing()) ResultBox.Text = Welcome();
         ResultBox.Focus();
@@ -877,6 +1012,7 @@ public partial class MainWindow : Window
         "Ctrl+V describes the picture on the clipboard." + Environment.NewLine +
         "Ctrl+S saves the picture just described." + Environment.NewLine +
         "Ctrl+Shift+S copies that picture to the clipboard." + Environment.NewLine +
+        "Ctrl+Shift+D copies the picture and its description together, to paste into a document, an email or File Explorer." + Environment.NewLine +
         "Ctrl+Shift+C copies the result." + Environment.NewLine +
         "Escape stops describing, minimizes Quick Describe and goes back to where you were. The hotkeys keep working." + Environment.NewLine +
         (keepRunning
@@ -992,6 +1128,11 @@ public partial class MainWindow : Window
         {
             e.Handled = true;
             OnCopyImage(sender, e);
+        }
+        else if (e.Key == Key.D && modifiers == (ModifierKeys.Control | ModifierKeys.Shift))
+        {
+            e.Handled = true;
+            OnCopyWithDescription(sender, e);
         }
         else if (e.Key == Key.OemComma && modifiers == ModifierKeys.Control)
         {

@@ -13,7 +13,7 @@ public sealed record Result(string? Description, string? DescriptionCode, string
     /// <summary>Said with the first result on such a PC, once ever (Settings.TextOnlySaid), in place of a "No description"
     /// line with every result.</summary>
     public const string TextOnlyNote =
-        "This PC can't describe pictures: Windows' image description needs a Copilot+ PC and a recent version of Windows 11. " +
+        "This PC can't describe pictures: Windows' image description needs a PC with an AI chip (an NPU), such as a Copilot+ PC, and a recent version of Windows 11. " +
         "Quick Describe reads the text in them instead.";
 
     /// <summary>Only the text, because this PC can't describe.</summary>

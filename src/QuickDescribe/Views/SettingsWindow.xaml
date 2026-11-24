@@ -4,7 +4,7 @@
         Title="Settings" Width="480" SizeToContent="Height" ResizeMode="NoResize"
         WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
     <!-- File > Settings: the hotkeys (the keys held, and each command's letter), the description type, starting at sign-in,
-         keeping running when closed and saving every picture. Every list and
+         keeping running when closed, saving every picture and putting the description in pictures saved. Every list and
          box is named as its label says: UI Automation showed them unnamed with only the label's Target set. -->
     <StackPanel Margin="14">
         <GroupBox Header="Hotkeys, from any app" Padding="8">
@@ -63,10 +63,27 @@
              text, and screenshots can hold private things. AccessText (for wrapping and Alt+V) gives a check box no
              name, so it's named here too, with the same words. -->
         <CheckBox x:Name="SaveEverythingBox" Margin="0,8,0,0"
-                  AutomationProperties.Name="Save a copy of every picture Quick Describe describes, in Pictures\Quick Describe. If OneDrive backs up your Pictures folder, it uploads them too."
-                  AutomationProperties.HelpText="Named with what was described and when. Picture files you open aren't copied.">
+                  AutomationProperties.Name="Save a copy of every picture Quick Describe describes, in Pictures\Quick Describe. File, Open Quick Describe Pictures Folder shows them. If OneDrive backs up your Pictures folder, it uploads them too."
+                  AutomationProperties.HelpText="Named with what was described and when.">
             <AccessText TextWrapping="Wrap"
-                        Text="Sa_ve a copy of every picture Quick Describe describes, in Pictures\Quick Describe. If OneDrive backs up your Pictures folder, it uploads them too." />
+                        Text="Sa_ve a copy of every picture Quick Describe describes, in Pictures\Quick Describe. File, Open Quick Describe Pictures Folder shows them. If OneDrive backs up your Pictures folder, it uploads them too." />
+        </CheckBox>
+        <!-- On by default; only matters with the box above on, which its text says, rather than being disabled (a disabled
+             box isn't reached with Tab, so a screen reader wouldn't find it to learn it's there). Indented under it. -->
+        <CheckBox x:Name="CopyOpenedBox" Margin="20,8,0,0"
+                  AutomationProperties.Name="When saving every picture, also copy picture files I open or drop. Your own file isn't changed."
+                  AutomationProperties.HelpText="Pictures already in Pictures\Quick Describe aren't copied again.">
+            <AccessText TextWrapping="Wrap"
+                        Text="When saving every picture, also copy picture files I op_en or drop. Your own file isn't changed." />
+        </CheckBox>
+        <!-- On by default. Covers Save Described Image, in whatever folder it saves, as well as the copies above: said in
+             the box's own text, as is that the text read goes in too (a screen's text can be private), since JAWS doesn't
+             read help text. -->
+        <CheckBox x:Name="AttachDescriptionsBox" Margin="0,8,0,0"
+                  AutomationProperties.Name="Put the description and the text read in each picture Quick Describe saves, with Save Described Image or Save every picture, where photo apps and File Explorer can show it."
+                  AutomationProperties.HelpText="Written in the picture's standard fields: File Explorer's Title and Comments, its caption and its accessibility alt text.">
+            <AccessText TextWrapping="Wrap"
+                        Text="_Put the description and the text read in each picture Quick Describe saves, with Save Described Image or Save every picture, where photo apps and File Explorer can show it." />
         </CheckBox>
 
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">

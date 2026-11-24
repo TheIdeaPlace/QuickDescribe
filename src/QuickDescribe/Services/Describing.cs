@@ -37,7 +37,7 @@ public static class Describing
             // started (and Help, Check Windows AI starts it again).
             if (readiness.State == "NotReady") return (null, "not_ready", NotReadyMessage);
             // The picture is frozen, so another thread can encode it.
-            var text = await ai.DescribeAsync(size => Task.Run(() => Pictures.Jpeg(image, size), cancel), kind, cancel);
+            var text = Clean(await ai.DescribeAsync(size => Task.Run(() => Pictures.Jpeg(image, size), cancel), kind, cancel));
             return text.Length > 0 ? (text, null, null) : (null, "empty", "Windows gave an empty description.");
         }
         catch (DescriptionException ex)
@@ -50,6 +50,27 @@ public static class Describing
             Log.Error("describe", "Describing failed", ex);
             return (null, "error", $"{ex.Message.Trim()} ({ex.GetType().Name})");
         }
+    }
+
+    /// <summary>
+    /// The description without the invisible characters Windows' model sometimes puts in it: on 24 Nov 2026 it gave
+    /// "signed " followed by a zero-width space, a combining grapheme joiner, a word joiner and another zero-width space
+    /// before "installer". Unseen, they make a screen reader stop or say something odd, keep a search for "signed
+    /// installer" from finding it, and go into the saved picture. Removed: format characters (zero-width spaces, word
+    /// joiners, direction marks, soft hyphens, byte order marks) and the combining grapheme joiner, except the
+    /// zero-width joiner and non-joiner, which emoji and some scripts need. Spaces left side by side become one.
+    /// </summary>
+    internal static string Clean(string description)
+    {
+        var text = new System.Text.StringBuilder(description.Length);
+        foreach (var c in description)
+        {
+            if (c is '‌' or '‍') text.Append(c);
+            else if (c == '͏' || char.GetUnicodeCategory(c) == System.Globalization.UnicodeCategory.Format) continue;
+            else if (c == ' ' && text.Length > 0 && text[^1] == ' ') continue;
+            else text.Append(c);
+        }
+        return text.ToString().Trim();
     }
 
     internal const string NotReadyMessage =

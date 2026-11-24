@@ -41,7 +41,7 @@ public static class Pictures
                                        (ex is NotSupportedException ? ": Windows can't read this type of file." : $": {ex.Message.Trim()}"));
         }
         if (image.CanFreeze) image.Freeze();
-        return new Picture(image, Path.GetFileName(path), IsFile: true);
+        return new Picture(image, Path.GetFileName(path), IsFile: true, FilePath: Path.GetFullPath(path));
     }
 
     /// <summary>A picture on the clipboard: a copied picture file, a picture copied as PNG (browsers, Office), or as a
@@ -185,32 +185,48 @@ public static class Pictures
     public static string SaveEverythingFolder =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyPictures), AppInfo.Name);
 
+    /// <summary>Whether a picture file is one save everything made (in its folder, or a folder inside it): describing it
+    /// again doesn't copy it again.</summary>
+    public static bool IsInSaveEverythingFolder(string? path, string? folder = null)
+    {
+        if (path is null) return false;
+        var root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(folder ?? SaveEverythingFolder)) + Path.DirectorySeparatorChar;
+        return Path.GetFullPath(path).StartsWith(root, StringComparison.OrdinalIgnoreCase);
+    }
+
     /// <summary>Saves a picture in a folder, named as Save Described Image suggests: JPEG for the camera's photos (a fifth of
     /// the size), PNG for the rest, which keeps a screen's text sharp. A name already there gets (2), (3) and so on.
     /// Returns the file's path.</summary>
-    public static string SaveToFolder(Picture picture, DateTime taken, string folder)
+    public static string SaveToFolder(Picture picture, DateTime taken, string folder, EmbeddedDescription? description = null)
     {
         Directory.CreateDirectory(folder);
         var name = Path.GetFileNameWithoutExtension(ScreenshotName(picture.Source, taken));
-        var extension = ExtensionFor(picture.Source);
+        var extension = ExtensionFor(picture);
         // One at a time: two pictures in the same second would otherwise both choose the same free name.
         lock (SavingToFolder)
         {
             var path = Path.Combine(folder, name + extension);
             for (var n = 2; File.Exists(path); n++) path = Path.Combine(folder, $"{name} ({n}){extension}");
-            Save(picture.Image, path);
+            Save(picture.Image, path, description);
             return path;
         }
     }
 
     private static readonly object SavingToFolder = new();
 
-    /// <summary>The type a picture is saved as: JPEG for the camera's photos (a fifth of the size), PNG for the rest,
-    /// which keeps a screen's text sharp.</summary>
-    public static string ExtensionFor(string source) =>
-        source.StartsWith("Camera", StringComparison.Ordinal) ? ".jpg" : ".png";
+    /// <summary>The type a picture is saved as: JPEG for photos, the camera's and picture files that were photos (JPEG,
+    /// HEIC, AVIF, WebP), a fifth of the size; PNG for the rest, which keeps a screen's text sharp.</summary>
+    public static string ExtensionFor(Picture picture) => ExtensionFor(picture.Source, picture.IsFile);
 
-    /// <summary>Which of <see cref="SaveFilter"/>'s types (counted from 1) fits <see cref="ExtensionFor"/>.</summary>
+    public static string ExtensionFor(string source, bool isFile = false) =>
+        source.StartsWith("Camera", StringComparison.Ordinal) && !isFile
+        || isFile && Path.GetExtension(source).ToLowerInvariant() is ".jpg" or ".jpeg" or ".jfif" or ".heic" or ".heif" or ".avif" or ".webp"
+            ? ".jpg"
+            : ".png";
+
+    /// <summary>Which of <see cref="SaveFilter"/>'s types (counted from 1) fits <see cref="ExtensionFor(Picture)"/>.</summary>
+    public static int SaveFilterIndexFor(Picture picture) => ExtensionFor(picture) == ".jpg" ? 2 : 1;
+
     public static int SaveFilterIndexFor(string source) => ExtensionFor(source) == ".jpg" ? 2 : 1;
 
     // ---- Saving a screenshot ----
@@ -275,18 +291,42 @@ public static class Pictures
     }
 
     /// <summary>Saves a picture as the file's extension says: JPEG for .jpg and .jpeg, PNG otherwise. Throws a
-    /// <see cref="PictureException"/> with a readable message when it can't.</summary>
-    public static void Save(BitmapSource image, string path)
+    /// <see cref="PictureException"/> with a readable message when it can't. With <paramref name="description"/>, the
+    /// description and text go in the file too; if they can't, the picture is saved without them.</summary>
+    public static void Save(BitmapSource image, string path, EmbeddedDescription? description = null)
     {
         BitmapEncoder encoder = Path.GetExtension(path).ToLowerInvariant() is ".jpg" or ".jpeg"
             ? new JpegBitmapEncoder { QualityLevel = 90 }
             : new PngBitmapEncoder();
-        encoder.Frames.Add(BitmapFrame.Create(image));
+        // Without the metadata of a picture file it was opened from: BitmapFrame.Create(image) would carry its XMP over,
+        // which leaves no room for the description, and its EXIF (where it was taken, the camera) into every copy.
+        encoder.Frames.Add(BitmapFrame.Create(image, null, null, null));
         // Written beside it first, so a failure part way doesn't leave a broken picture, or spoil one being replaced.
         var partial = path + ".partial";
         try
         {
-            using (var stream = File.Create(partial)) encoder.Save(stream);
+            if (description is null)
+            {
+                // Straight to the file: a 4K screen's PNG is tens of MB, not worth holding twice.
+                using var stream = File.Create(partial);
+                encoder.Save(stream);
+            }
+            else
+            {
+                var encoded = new MemoryStream();
+                encoder.Save(encoded);
+                var bytes = encoded.ToArray();
+                try
+                {
+                    bytes = description.AddTo(bytes);
+                }
+                catch (Exception ex)
+                {
+                    // Saved without it rather than not at all.
+                    Log.Error("save", "The description wasn't put in the picture", ex);
+                }
+                File.WriteAllBytes(partial, bytes);
+            }
             File.Move(partial, path, overwrite: true);
         }
         catch (Exception ex)

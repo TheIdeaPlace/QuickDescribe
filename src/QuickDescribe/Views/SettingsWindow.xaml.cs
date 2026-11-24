@@ -27,10 +27,13 @@ public partial class SettingsWindow : Window
     public bool SignIn { get; private set; }
     public bool KeepRunning { get; private set; }
     public bool SaveEverything { get; private set; }
+    public bool AttachDescriptions { get; private set; }
+    public bool CopyOpenedPictures { get; private set; }
 
     /// <param name="apply">Puts a map into use and says which of its hotkeys Windows refused (another app has them).</param>
     /// <param name="signIn">Whether Windows starts Quick Describe at sign-in now.</param>
-    public SettingsWindow(HotKeyMap map, string kind, Func<HotKeyMap, IReadOnlyList<Target>> apply, SignInStart signIn, bool keepRunning, bool saveEverything)
+    public SettingsWindow(HotKeyMap map, string kind, Func<HotKeyMap, IReadOnlyList<Target>> apply, SignInStart signIn, bool keepRunning, bool saveEverything,
+        bool attachDescriptions, bool copyOpenedPictures)
     {
         InitializeComponent();
         _apply = apply;
@@ -41,6 +44,10 @@ public partial class SettingsWindow : Window
         KeepRunning = keepRunning;
         SaveEverything = saveEverything;
         SaveEverythingBox.IsChecked = saveEverything;
+        AttachDescriptions = attachDescriptions;
+        AttachDescriptionsBox.IsChecked = attachDescriptions;
+        CopyOpenedPictures = copyOpenedPictures;
+        CopyOpenedBox.IsChecked = copyOpenedPictures;
         // Said in the label, as well as after OK: a screen reader reads the label with the box.
         if (StartAtSignIn.StateNote(signIn) is { } note) SignInBox.Content = $"{SignInBox.Content} ({note})";
         if (signIn == SignInStart.Unavailable)
@@ -117,8 +124,11 @@ public partial class SettingsWindow : Window
     {
         Show(HotKeyMap.Default, WindowsAI.Kinds[0].Id, false, false);
         SaveEverythingBox.IsChecked = false;
+        AttachDescriptionsBox.IsChecked = true;
+        CopyOpenedBox.IsChecked = true;
         _warnedAbout = null;
-        Announcer.Announce($"Back to the defaults. {SummaryText.Text} Starting with Windows, keeping running and saving every picture are off.");
+        Announcer.Announce($"Back to the defaults. {SummaryText.Text} Starting with Windows, keeping running and saving every picture are off. " +
+                           "Copying pictures you open and putting the description in each picture saved are on.");
     }
 
     private void Ok_Click(object sender, RoutedEventArgs e)
@@ -141,6 +151,8 @@ public partial class SettingsWindow : Window
         if (SignInBox.Visibility == Visibility.Visible) SignIn = SignInBox.IsChecked == true;
         KeepRunning = KeepRunningBox.IsChecked == true;
         SaveEverything = SaveEverythingBox.IsChecked == true;
+        AttachDescriptions = AttachDescriptionsBox.IsChecked == true;
+        CopyOpenedPictures = CopyOpenedBox.IsChecked == true;
         // Tried with Windows now, so a combination another app has is said here, where it can be changed.
         var refused = _apply(map);
         Map = map;
