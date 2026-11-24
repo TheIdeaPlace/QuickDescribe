@@ -41,7 +41,7 @@ public static class Pictures
                                        (ex is NotSupportedException ? ": Windows can't read this type of file." : $": {ex.Message.Trim()}"));
         }
         if (image.CanFreeze) image.Freeze();
-        return new Picture(image, Path.GetFileName(path), IsFile: true);
+        return new Picture(image, Path.GetFileName(path), IsFile: true, FilePath: Path.GetFullPath(path));
     }
 
     /// <summary>A picture on the clipboard: a copied picture file, a picture copied as PNG (browsers, Office), or as a
@@ -185,6 +185,15 @@ public static class Pictures
     public static string SaveEverythingFolder =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyPictures), AppInfo.Name);
 
+    /// <summary>Whether a picture file is one save everything made (in its folder, or a folder inside it): describing it
+    /// again doesn't copy it again.</summary>
+    public static bool IsInSaveEverythingFolder(string? path, string? folder = null)
+    {
+        if (path is null) return false;
+        var root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(folder ?? SaveEverythingFolder)) + Path.DirectorySeparatorChar;
+        return Path.GetFullPath(path).StartsWith(root, StringComparison.OrdinalIgnoreCase);
+    }
+
     /// <summary>Saves a picture in a folder, named as Save Described Image suggests: JPEG for the camera's photos (a fifth of
     /// the size), PNG for the rest, which keeps a screen's text sharp. A name already there gets (2), (3) and so on.
     /// Returns the file's path.</summary>
@@ -192,7 +201,7 @@ public static class Pictures
     {
         Directory.CreateDirectory(folder);
         var name = Path.GetFileNameWithoutExtension(ScreenshotName(picture.Source, taken));
-        var extension = ExtensionFor(picture.Source);
+        var extension = ExtensionFor(picture);
         // One at a time: two pictures in the same second would otherwise both choose the same free name.
         lock (SavingToFolder)
         {
@@ -205,12 +214,19 @@ public static class Pictures
 
     private static readonly object SavingToFolder = new();
 
-    /// <summary>The type a picture is saved as: JPEG for the camera's photos (a fifth of the size), PNG for the rest,
-    /// which keeps a screen's text sharp.</summary>
-    public static string ExtensionFor(string source) =>
-        source.StartsWith("Camera", StringComparison.Ordinal) ? ".jpg" : ".png";
+    /// <summary>The type a picture is saved as: JPEG for photos, the camera's and picture files that were photos (JPEG,
+    /// HEIC, AVIF, WebP), a fifth of the size; PNG for the rest, which keeps a screen's text sharp.</summary>
+    public static string ExtensionFor(Picture picture) => ExtensionFor(picture.Source, picture.IsFile);
 
-    /// <summary>Which of <see cref="SaveFilter"/>'s types (counted from 1) fits <see cref="ExtensionFor"/>.</summary>
+    public static string ExtensionFor(string source, bool isFile = false) =>
+        source.StartsWith("Camera", StringComparison.Ordinal) && !isFile
+        || isFile && Path.GetExtension(source).ToLowerInvariant() is ".jpg" or ".jpeg" or ".jfif" or ".heic" or ".heif" or ".avif" or ".webp"
+            ? ".jpg"
+            : ".png";
+
+    /// <summary>Which of <see cref="SaveFilter"/>'s types (counted from 1) fits <see cref="ExtensionFor(Picture)"/>.</summary>
+    public static int SaveFilterIndexFor(Picture picture) => ExtensionFor(picture) == ".jpg" ? 2 : 1;
+
     public static int SaveFilterIndexFor(string source) => ExtensionFor(source) == ".jpg" ? 2 : 1;
 
     // ---- Saving a screenshot ----

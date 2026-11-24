@@ -451,11 +451,13 @@ public partial class MainWindow : Window
     private Task DescribeFileAsync(Picture picture) => DescribeAsync(picture, StartRequest());
 
     /// <summary>Save everything: a copy of each picture described, in Pictures\Quick Describe, named as Save Described Image
-    /// would suggest, off the UI thread while it's described. Picture files aren't copied: you have them. Returns the
-    /// copy's path, or what to say when it couldn't be saved (see <see cref="SayIfNotSavedAsync"/>).</summary>
+    /// would suggest, off the UI thread while it's described. Picture files are copied too when Settings' "Also copy
+    /// pictures I open" is on (the default), except ones already in that folder. Returns the copy's path, or what to say
+    /// when it couldn't be saved (see <see cref="SayIfNotSavedAsync"/>).</summary>
     private async Task<(string? Path, string? NotSaved)> SaveEverythingAsync(Picture picture, DateTime taken)
     {
-        if (!_settings.SaveEverything || picture.IsFile) return (null, null);
+        if (!_settings.SaveEverything) return (null, null);
+        if (picture.IsFile && !(_settings.CopyOpenedPictures && !Pictures.IsInSaveEverythingFolder(picture.FilePath))) return (null, null);
         try
         {
             var path = await Task.Run(() => Pictures.SaveToFolder(picture, taken, Pictures.SaveEverythingFolder));
@@ -719,9 +721,9 @@ public partial class MainWindow : Window
             Title = "Save Described Image",
             Filter = Pictures.SaveFilter,
             // The camera's photos as JPEG, the rest as PNG, as Save every picture keeps them.
-            FileName = Path.ChangeExtension(Pictures.ScreenshotName(picture.Source, taken), Pictures.ExtensionFor(picture.Source)),
-            FilterIndex = Pictures.SaveFilterIndexFor(picture.Source),
-            DefaultExt = Pictures.ExtensionFor(picture.Source),
+            FileName = Path.ChangeExtension(Pictures.ScreenshotName(picture.Source, taken), Pictures.ExtensionFor(picture)),
+            FilterIndex = Pictures.SaveFilterIndexFor(picture),
+            DefaultExt = Pictures.ExtensionFor(picture),
             AddExtension = true,
             InitialDirectory = folder,
         };
@@ -901,7 +903,7 @@ public partial class MainWindow : Window
             // Quitting, or closed to the notification area, while Windows answered.
             if (_closing.IsCancellationRequested || !IsVisible) return;
             dialog = new SettingsWindow(before, _settings.Kind, UseHotKeys, signIn, _settings.KeepRunning, _settings.SaveEverything,
-                _settings.AttachDescriptions) { Owner = this };
+                _settings.AttachDescriptions, _settings.CopyOpenedPictures) { Owner = this };
             saved = dialog.ShowDialog() == true;
             if (saved) await SaveSettingsAsync(dialog);
         }
@@ -924,13 +926,14 @@ public partial class MainWindow : Window
         _settings.KeepRunning = dialog.KeepRunning;
         _settings.SaveEverything = dialog.SaveEverything;
         _settings.AttachDescriptions = dialog.AttachDescriptions;
+        _settings.CopyOpenedPictures = dialog.CopyOpenedPictures;
         _settings.Save();
         ShowKind();
         ShowExitGesture();
         ShowTrayWhileKeptRunning();
         Log.Write("settings", $"Hotkeys {SettingsWindow.Summary(dialog.Map)} Description type {dialog.Kind}. " +
                               $"Start at sign-in {(dialog.SignIn ? "on" : "off")}. Keep running {(dialog.KeepRunning ? "on" : "off")}. Save everything {(dialog.SaveEverything ? "on" : "off")}. " +
-                              $"Description in saved pictures {(dialog.AttachDescriptions ? "on" : "off")}.");
+                              $"Copy opened pictures {(dialog.CopyOpenedPictures ? "on" : "off")}. Description in saved pictures {(dialog.AttachDescriptions ? "on" : "off")}.");
         // The welcome or F1 text says the hotkeys, so it's brought up to date; a result in the box is left alone.
         if (IsWelcomeShowing()) ResultBox.Text = Welcome();
         ResultBox.Focus();

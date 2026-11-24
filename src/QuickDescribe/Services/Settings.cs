@@ -32,6 +32,11 @@ public sealed class Settings
     /// Pictures\Quick Describe. Off unless chosen.</summary>
     public bool SaveEverything { get; set; }
 
+    /// <summary>Settings' "Also copy pictures I open": with save everything on, a picture file described (opened, dropped,
+    /// or copied in File Explorer) is copied there too, with its description; never one already there. On unless turned
+    /// off (Kelly, 24 Nov 2026).</summary>
+    public bool CopyOpenedPictures { get; set; } = true;
+
     /// <summary>Settings' "Put the description in each picture saved": Save Described Image and save everything write the
     /// description and the text read into the file (<see cref="EmbeddedDescription"/>). On unless turned off, also for
     /// settings saved before it was added.</summary>
