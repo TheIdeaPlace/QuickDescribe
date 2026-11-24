@@ -15,8 +15,8 @@ namespace QuickDescribe.Services;
 /// - Alt Text (Accessibility), IPTC's AltTextAccessibility: the description, shortened to 250 characters as IPTC asks;
 ///   with no description, the text read, shortened the same way.
 /// - Extended Description (Accessibility), IPTC's ExtDescrAccessibility: the whole caption, when the alt text is less.
-/// - Title, dc:title (File Explorer's Title): the alt text of the description; none when there isn't a description,
-///   so a screen's text doesn't become a title. The file holds all of it; Explorer shows about 150 characters.
+/// - Title, dc:title (File Explorer's Title): the description's first one or two sentences (<see cref="ShortTitle"/>);
+///   none when there isn't a description, so a screen's text doesn't become a title.
 /// - Comment, exif:UserComment (File Explorer's Comments, for PNG and JPEG): the whole caption, which Explorer shows in
 ///   full. My Photo Library Described doesn't write this one; it shows it as Comments.
 /// </summary>
@@ -59,7 +59,23 @@ public sealed partial record EmbeddedDescription(string? Description, string? Te
 
     public string? ExtendedDescription => AltText == Caption ? null : Caption;
 
-    public string? Title => Description is null ? null : AltText;
+    public string? Title => Description is null ? null : ShortTitle(Description);
+
+    /// <summary>About as much as File Explorer shows of a Title (checked on Kelly's PC, 24 Nov 2026).</summary>
+    public const int TitleLimit = 150;
+
+    /// <summary>A Title of one or two sentences (Kelly, 24 Nov 2026): the first two when together they fit in what
+    /// Explorer shows, otherwise the first alone, shortened as alt text is when even that is over 250 characters. The
+    /// whole description is in Comments.</summary>
+    public static string ShortTitle(string description)
+    {
+        var text = description.Trim();
+        var ends = SentenceEnd().Matches(text).Select(m => m.Index + m.Length).ToList();
+        if (ends.Count == 0) return Shorten(text);
+        var first = text[..ends[0]].Trim();
+        if (ends.Count > 1 && text[..ends[1]].Trim() is { } two && two.Length <= TitleLimit) return two;
+        return Shorten(first);
+    }
 
     /// <summary>The text when it fits in 250 characters, otherwise the whole sentences from its start that fit. When even
     /// the first sentence is longer, it's cut at a word boundary and ends with "…". As My Photo Library Described's

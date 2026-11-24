@@ -236,6 +236,26 @@ public class EmbeddedDescriptionTests : IDisposable
         }
     }
 
+    [Theory]
+    // Two short sentences fit in what Explorer shows.
+    [InlineData("A cat on a sofa. It is asleep. A lamp is beside it.", "A cat on a sofa. It is asleep.")]
+    // Windows' descriptions of the 24 Nov 2026 screens: two sentences are too long together, so the first alone.
+    [InlineData("The image appears to be a user interface, likely from a software application or operating system. It shows a black background with a blue button labeled \"Getting Started\" at the center. Below it, there are various options.",
+        "The image appears to be a user interface, likely from a software application or operating system.")]
+    [InlineData("One sentence without an end", "One sentence without an end")]
+    public void Title_IsOneOrTwoSentences(string description, string title)
+    {
+        Assert.Equal(title, EmbeddedDescription.ShortTitle(description));
+        Assert.Equal(title, EmbeddedDescription.For(Described(description))!.Title);
+    }
+
+    [Fact]
+    public void Title_OneVeryLongSentence_IsShortenedLikeAltText()
+    {
+        var sentence = string.Join(' ', Enumerable.Repeat("word", 80)) + ".";
+        Assert.Equal(EmbeddedDescription.Shorten(sentence), EmbeddedDescription.ShortTitle(sentence));
+    }
+
     [Fact]
     public void WithoutFields_NothingIsAdded()
     {
