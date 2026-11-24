@@ -22,7 +22,7 @@ Start Quick Describe. While it's running, these keys work from any app:
 | Ctrl+Alt+Shift+S | The screen the active window is on |
 | Ctrl+Alt+Shift+W | The active window |
 | Ctrl+Alt+Shift+F | The item with keyboard focus, and what's around it |
-| Ctrl+Alt+Shift+V | A picture on the clipboard, or a picture file you've copied |
+| Ctrl+Alt+Shift+V | A picture on the clipboard, or a picture file you've copied (only the first, if you copied several) |
 | Ctrl+Alt+Shift+M | A picture it takes with the camera |
 
 These are the defaults; **File, Settings** changes them (see below).
@@ -62,7 +62,7 @@ In Quick Describe itself:
 - **Windows Studio Effects** on Copilot+ PCs (background blur, for one) change the picture for every app, Quick Describe included: a blurred background is described as blurred. They're in Windows Settings, Bluetooth & devices, Cameras.
 - **Save Described Image** and **Copy Described Image** work on the camera's picture too.
 
-You can also drop a picture file on the window. The Describe menu does the same as the hotkeys: it steps out of the way first, so it describes what's behind Quick Describe. **Describe, Description Type** chooses how much detail you get: Accessible (the default, written for people who are blind or have low vision), Detailed, Brief or Diagram. **Help, Check Windows AI** says whether your PC can describe pictures, and why not if it can't.
+You can also drop a picture file on the window. Quick Describe describes one picture at a time: if you copy or drop several picture files, it describes only the first of them and leaves the rest. The Describe menu does the same as the hotkeys: it steps out of the way first, so it describes what's behind Quick Describe. **Describe, Description Type** chooses how much detail you get: Accessible (the default, written for people who are blind or have low vision), Detailed, Brief or Diagram. **Help, Check Windows AI** says whether your PC can describe pictures, and why not if it can't.
 
 ## Reporting a bug or suggesting something
 
