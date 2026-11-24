@@ -16,7 +16,9 @@ namespace QuickDescribe.Services;
 ///   with no description, the text read, shortened the same way.
 /// - Extended Description (Accessibility), IPTC's ExtDescrAccessibility: the whole caption, when the alt text is less.
 /// - Title, dc:title (File Explorer's Title): the alt text of the description; none when there isn't a description,
-///   so a screen's text doesn't become a title.
+///   so a screen's text doesn't become a title. The file holds all of it; Explorer shows about 150 characters.
+/// - Comment, exif:UserComment (File Explorer's Comments, for PNG and JPEG): the whole caption, which Explorer shows in
+///   full. My Photo Library Described doesn't write this one; it shows it as Comments.
 /// </summary>
 public sealed partial record EmbeddedDescription(string? Description, string? Text)
 {
@@ -101,6 +103,7 @@ public sealed partial record EmbeddedDescription(string? Description, string? Te
     private static readonly XNamespace Meta = "adobe:ns:meta/";
     private static readonly XNamespace Dc = "http://purl.org/dc/elements/1.1/";
     private static readonly XNamespace Iptc = "http://iptc.org/std/Iptc4xmpCore/1.0/xmlns/";
+    private static readonly XNamespace Exif = "http://ns.adobe.com/exif/1.0/";
 
     /// <summary>The fields as an XMP packet, in its wrapper, without padding: the file is written whole, never edited in
     /// place.</summary>
@@ -114,6 +117,13 @@ public sealed partial record EmbeddedDescription(string? Description, string? Te
         if (Title is not null) description.Add(LangAlt(Dc + "title", Title));
         description.Add(LangAlt(Iptc + "AltTextAccessibility", AltText));
         if (withExtended && ExtendedDescription is not null) description.Add(LangAlt(Iptc + "ExtDescrAccessibility", ExtendedDescription));
+        // File Explorer's Comments: the whole caption, where Explorer shows all of it (840 characters, checked on Kelly's
+        // PC, 24 Nov 2026), as it doesn't the Title. Left out with the extended description when a JPEG has no room.
+        if (withExtended)
+        {
+            description.SetAttributeValue(XNamespace.Xmlns + "exif", Exif);
+            description.Add(LangAlt(Exif + "UserComment", Caption));
+        }
         var root = new XElement(Meta + "xmpmeta", new XAttribute(XNamespace.Xmlns + "x", Meta),
             new XElement(Rdf + "RDF", new XAttribute(XNamespace.Xmlns + "rdf", Rdf), description));
         var buffer = new MemoryStream();
@@ -130,12 +140,13 @@ public sealed partial record EmbeddedDescription(string? Description, string? Te
             .. Encoding.UTF8.GetBytes("<?xpacket end=\"w\"?>")];
     }
 
-    /// <summary>The caption, alt text, extended description and title in a packet, null for each it doesn't have.</summary>
-    public static (string? Caption, string? AltText, string? ExtendedDescription, string? Title) Fields(ReadOnlySpan<byte> packet)
+    /// <summary>The caption, alt text, extended description, title and comment in a packet, null for each it doesn't have.</summary>
+    public static (string? Caption, string? AltText, string? ExtendedDescription, string? Title, string? Comment) Fields(ReadOnlySpan<byte> packet)
     {
         var document = XDocument.Parse(Encoding.UTF8.GetString(packet));
         string? Get(XName name) => document.Descendants(name).FirstOrDefault()?.Descendants(Rdf + "li").FirstOrDefault()?.Value;
-        return (Get(Dc + "description"), Get(Iptc + "AltTextAccessibility"), Get(Iptc + "ExtDescrAccessibility"), Get(Dc + "title"));
+        return (Get(Dc + "description"), Get(Iptc + "AltTextAccessibility"), Get(Iptc + "ExtDescrAccessibility"), Get(Dc + "title"),
+            Get(Exif + "UserComment"));
     }
 
     // ---- Into the file ----
@@ -156,7 +167,8 @@ public sealed partial record EmbeddedDescription(string? Description, string? Te
         if (file.Length >= 4 && file[0] == 0xFF && file[1] == 0xD8)
         {
             // Rare: a camera picture with a long text, more than one JPEG segment holds. First without the extended
-            // description (it repeats the caption), then without the text read, then with only the alt text's share of it.
+            // description and comment (they repeat the caption), then without the text read, then with only the alt
+            // text's share of it.
             var packet = new Func<byte[]?>[]
                 {
                     () => Packet(),

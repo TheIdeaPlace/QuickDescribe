@@ -87,6 +87,7 @@ public class EmbeddedDescriptionTests : IDisposable
         Assert.Equal(fields.AltText, back.AltText);
         Assert.Equal(fields.ExtendedDescription, back.ExtendedDescription);
         Assert.Equal(fields.Title, back.Title);
+        Assert.Equal(fields.Caption, back.Comment);
         AssertOpens(path, 40, 30);
     }
 
@@ -100,9 +101,10 @@ public class EmbeddedDescriptionTests : IDisposable
         {
             using var stream = File.OpenRead(path);
             var frame = BitmapDecoder.Create(stream, BitmapCreateOptions.None, BitmapCacheOption.OnLoad).Frames[0];
-            return ((BitmapMetadata)frame.Metadata).Title;
+            var metadata = (BitmapMetadata)frame.Metadata;
+            return (metadata.Title, metadata.Comment);
         });
-        Assert.Equal("A cat on a sofa.", title);
+        Assert.Equal(("A cat on a sofa.", "A cat on a sofa."), title);
     }
 
     [Fact]
@@ -114,9 +116,10 @@ public class EmbeddedDescriptionTests : IDisposable
         {
             using var stream = File.OpenRead(path);
             var frame = BitmapDecoder.Create(stream, BitmapCreateOptions.None, BitmapCacheOption.OnLoad).Frames[0];
-            return ((BitmapMetadata)frame.Metadata).Title;
+            var metadata = (BitmapMetadata)frame.Metadata;
+            return (metadata.Title, metadata.Comment);
         });
-        Assert.Equal("A cat on a sofa.", title);
+        Assert.Equal(("A cat on a sofa.", "A cat on a sofa."), title);
 
         // Every chunk's CRC is right: a decoder may skip a bad one quietly, and so lose the fields.
         Assert.Equal(0xAE426082u, EmbeddedDescription.Crc32("IEND"u8));
@@ -212,6 +215,25 @@ public class EmbeddedDescriptionTests : IDisposable
         Assert.True(alt.Length <= EmbeddedDescription.AltTextLimit);
         Assert.False(char.IsHighSurrogate(alt[^2]) && !char.IsLowSurrogate(alt[^1]));
         Assert.All(alt.Select((c, i) => (c, i)).Where(x => char.IsHighSurrogate(x.c)), x => Assert.True(char.IsLowSurrogate(alt[x.i + 1])));
+    }
+
+    [Fact]
+    public void Comment_HoldsTheWholeCaption_LongerThanExplorerShowsATitle()
+    {
+        var description = string.Concat(Enumerable.Repeat("A sentence about the picture that goes on for a while. ", 15)).Trim();
+        var fields = EmbeddedDescription.For(Described(description, "Some text"))!;
+        foreach (var name in new[] { "long.png", "long.jpg" })
+        {
+            var path = Path.Combine(_folder, name);
+            Pictures.Save(Drawn.Solid(10, 10, 0, 0, 0), path, fields);
+            var comment = Drawn.OnSta(() =>
+            {
+                using var stream = File.OpenRead(path);
+                return ((BitmapMetadata)BitmapDecoder.Create(stream, BitmapCreateOptions.None, BitmapCacheOption.OnLoad).Frames[0].Metadata).Comment;
+            });
+            // Windows reads the line breaks back as LF alone.
+            Assert.Equal(fields.Caption.ReplaceLineEndings("\n"), comment);
+        }
     }
 
     [Fact]
